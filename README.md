@@ -1,118 +1,94 @@
 # 💰 Mis Finanzas — PWA para Android
 
-App de finanzas personales que funciona como app instalable en Android, con sincronización a Google Drive.
+App de finanzas personales instalable en Android. Funciona **100% offline**, sin Google Cloud, sin cuentas externas. Los datos se guardan en el dispositivo y podés exportarlos a Excel cuando quieras.
 
 ---
 
-## 🚀 Instalación en 3 pasos
+## 🚀 Instalar en Android (2 pasos)
 
 ### Paso 1 — Subir a GitHub Pages
 
 1. Creá un repositorio nuevo en GitHub (ej: `mis-finanzas`)
-2. Subí **todos estos archivos** al repositorio:
-   - `index.html`
-   - `manifest.json`
-   - `sw.js`
-   - `google-auth.js`
-   - `icons/icon-192.png`
-   - `icons/icon-512.png`
-3. En el repositorio → **Settings** → **Pages** → Source: `main` → `/root`
-4. Tu app va a estar en: `https://TU-USUARIO.github.io/mis-finanzas`
+2. Subí **todos estos archivos** manteniendo la estructura:
+   ```
+   index.html
+   manifest.json
+   sw.js
+   icons/
+     icon-192.png
+     icon-512.png
+   ```
+   > No hace falta subir `google-auth.js` ni `README.md`
+3. En el repositorio → **Settings** → **Pages** → Source: `main` → Save
+4. En 1-2 minutos tu app está en: `https://TU-USUARIO.github.io/mis-finanzas`
 
 ### Paso 2 — Instalar en Android
 
-1. Abrí Chrome en tu Android
-2. Ingresá a tu URL de GitHub Pages
-3. Chrome va a mostrar un banner "Agregar a pantalla de inicio"
-   - Si no aparece: tocar el menú (⋮) → "Agregar a pantalla de inicio"
-4. ¡La app aparece en tu pantalla de inicio como una app nativa!
-
-### Paso 3 — Conectar Google Drive (opcional pero recomendado)
-
-#### 3a. Crear proyecto en Google Cloud
-
-1. Ir a [console.cloud.google.com](https://console.cloud.google.com)
-2. **Nuevo proyecto** → ponerle nombre (ej: "MisFinanzas")
-3. Ir a **APIs y servicios** → **Habilitar APIs**
-4. Habilitar: **Google Sheets API** y **Google Drive API**
-
-#### 3b. Crear credenciales OAuth
-
-1. Ir a **APIs y servicios** → **Credenciales**
-2. **+ Crear credenciales** → **ID de cliente OAuth 2.0**
-3. Tipo: **Aplicación web**
-4. Nombre: "MisFinanzas PWA"
-5. En **Orígenes JavaScript autorizados**, agregar:
-   ```
-   https://TU-USUARIO.github.io
-   ```
-6. En **URIs de redireccionamiento autorizados**, agregar:
-   ```
-   https://TU-USUARIO.github.io/mis-finanzas/
-   ```
-7. Hacer clic en **Crear**
-8. Copiar el **ID de cliente** (termina en `.apps.googleusercontent.com`)
-
-#### 3c. Configurar en la app
-
-1. Abrir el archivo `google-auth.js`
-2. Reemplazar esta línea:
-   ```javascript
-   const GOOGLE_CLIENT_ID = 'TU_CLIENT_ID_AQUI.apps.googleusercontent.com';
-   ```
-   Por tu ID de cliente real:
-   ```javascript
-   const GOOGLE_CLIENT_ID = '123456789-abcdef.apps.googleusercontent.com';
-   ```
-3. Subir el archivo actualizado a GitHub
-4. ¡Listo! El botón "Drive" en la app ahora funciona de verdad
+1. Abrí **Chrome** en tu Android
+2. Entrá a tu URL de GitHub Pages
+3. Chrome muestra el banner **"Agregar a pantalla de inicio"** → tocá **Instalar**
+   - Si no aparece el banner: menú (⋮) → "Agregar a pantalla de inicio"
+4. ¡La app aparece como ícono nativo, sin barra del navegador, funciona offline!
 
 ---
 
-## 📱 Íconos de la app
+## 💾 Cómo funcionan los datos
 
-Los íconos necesitás crearlos o generarlos. Podés usar:
-- [PWA Builder](https://www.pwabuilder.com/imageGenerator) — subís una imagen y genera todos los tamaños
-- [Favicon.io](https://favicon.io) — para generar íconos rápido
-
-Guardalos como:
-- `icons/icon-192.png` (192×192 px)
-- `icons/icon-512.png` (512×512 px)
+- Todo se guarda **automáticamente** en el dispositivo (localStorage)
+- Funciona **sin internet** una vez instalada
+- Nada se envía a ningún servidor externo
 
 ---
 
-## 🔄 Cómo funciona el sync con Google Drive
+## 📤 Exportar e importar datos
 
-Cuando tocás **"Sincronizar ahora"** en la app:
+Tocá el botón **"Datos"** en la barra superior para:
 
-1. Se crea (o actualiza) una hoja de cálculo en tu Google Drive llamada **"Mis Finanzas Personales"**
-2. La hoja tiene 3 pestañas:
-   - **Transacciones** — todos tus movimientos
-   - **Presupuestos** — tus límites por categoría
-   - **Resumen** — balance mensual automático
+### Exportar a Excel (.xlsx)
+Genera un archivo Excel con 4 hojas:
+- **Transacciones** — todos tus movimientos ordenados por fecha
+- **Presupuestos** — tus límites mensuales por categoría
+- **Resumen mensual** — ingresos, gastos, balance por mes
+- **Categorías (mes actual)** — análisis del mes en curso con % por categoría
 
-Podés ver y editar la hoja desde cualquier dispositivo en [Google Sheets](https://sheets.google.com).
+Podés abrirlo en Excel, Google Sheets, o Libre Office.
+
+### Exportar backup (.json)
+Copia de seguridad completa de todos tus datos. Usalo para:
+- Hacer backup antes de cambiar de teléfono
+- Restaurar datos en otro dispositivo
+
+### Importar desde backup (.json)
+Restaura todos tus datos desde un archivo `.json` exportado anteriormente.
+⚠️ Reemplaza los datos actuales del dispositivo.
 
 ---
 
-## 💾 Almacenamiento local
+## 📱 Íconos
 
-Los datos se guardan **automáticamente** en el dispositivo (localStorage) cada vez que cargás un movimiento. La app funciona **sin internet** gracias al Service Worker.
+Si querés personalizar el ícono de la app, reemplazá los archivos en `icons/`:
+- `icon-192.png` → 192×192 px
+- `icon-512.png` → 512×512 px
 
-El sync con Drive es **manual** (botón Drive en la barra superior) — así tenés control total sobre cuándo sincronizar.
+Podés generarlos en [pwabuilder.com/imageGenerator](https://www.pwabuilder.com/imageGenerator)
 
 ---
 
 ## ❓ Preguntas frecuentes
 
-**¿Mis datos están seguros?**  
-Sí. Los datos se guardan localmente en tu teléfono. El sync a Drive solo ocurre cuando vos lo pedís, y solo en tu cuenta de Google.
+**¿Mis datos están en algún servidor?**
+No. Todo queda en tu teléfono. La app no hace ninguna llamada a internet con tus datos.
 
-**¿Funciona sin internet?**  
-Sí. Una vez instalada, la app funciona completamente offline. Solo necesitás internet para sincronizar con Drive.
+**¿Qué pasa si desinstalo la app?**
+Los datos del localStorage se borran. Hacé un backup (.json) antes de desinstalar.
 
-**¿Puedo usar la app en varios dispositivos?**  
-Sí. Instalala en cada dispositivo y usá el sync con Drive para mantener los datos actualizados.
+**¿Puedo usarla en la PC también?**
+Sí. Entrá a la URL desde Chrome en la PC y podés instalarla como app de escritorio también.
 
-**¿Cómo importo mis datos si cambio de teléfono?**  
-Exportá los datos desde el botón Drive → "Exportar datos (JSON)", y en el nuevo teléfono podés importarlos (funcionalidad a agregar).
+**¿Funciona en iPhone?**
+Sí, con Safari. Ir a la URL → compartir → "Agregar a pantalla de inicio".
+
+**¿Cómo paso los datos a otro teléfono?**
+1. En el teléfono viejo: Datos → Exportar backup (.json)
+2. Mandarte el archivo por WhatsApp, email, etc.
+3. En el teléfono nuevo: instalás la app → Datos → Importar

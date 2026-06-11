@@ -7,13 +7,14 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="MisFinanzas">
-<meta name="description" content="Gestión de finanzas personales con sync a Google Drive">
+<meta name="description" content="Gestión de finanzas personales — 100% local, exporta a Excel">
 <title>Mis Finanzas</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
   :root {
     --green: #1D9E75; --green-d: #0F6E56; --green-bg: #E1F5EE;
@@ -120,8 +121,8 @@
       <div class="topbar-sub" id="topbar-sub">Cargando...</div>
     </div>
     <button class="sync-btn" id="sync-btn" onclick="handleSync()">
-      <i class="ti ti-brand-google-drive"></i>
-      <span id="sync-label">Drive</span>
+      <i class="ti ti-database-export"></i>
+      <span id="sync-label">Datos</span>
     </button>
   </div>
 
@@ -248,12 +249,13 @@
   </nav>
 </div>
 
-<!-- Modal Drive -->
+<!-- Modal Datos -->
 <div class="overlay" id="drive-overlay" onclick="if(event.target===this)closeDrive()">
   <div class="modal">
     <div class="modal-handle"></div>
-    <div class="modal-title"><i class="ti ti-brand-google-drive" style="color:var(--green)"></i> Sincronizar con Google Drive</div>
+    <div class="modal-title"><i class="ti ti-database" style="color:var(--green)"></i> Exportar e Importar datos</div>
     <div id="drive-content"></div>
+    <input type="file" id="import-file" accept=".xlsx,.json" style="display:none" onchange="handleImportFile(this)">
   </div>
 </div>
 
@@ -562,50 +564,138 @@ function renderAnalysis() {
   }
 }
 
-// ─── GOOGLE DRIVE ─────────────────────────────────────────────────────────────
+// ─── EXPORTAR / IMPORTAR ──────────────────────────────────────────────────────
 function handleSync() {
-  const dc = document.getElementById('drive-content');
-  const isLogged = window.gAuth && window.gAuth.isSignedIn();
-  if (isLogged) {
-    dc.innerHTML = `
-      <div class="alert success" style="margin-bottom:14px"><i class="ti ti-circle-check"></i><div class="alert-body">Conectado a Google Drive como <b>${window.gAuth.getEmail()}</b></div></div>
-      <button class="btn primary" style="margin-bottom:10px" onclick="syncToSheets()"><i class="ti ti-upload"></i> Sincronizar ahora</button>
-      <button class="btn" onclick="gAuth.signOut();closeDrive();toast('Sesión cerrada')"><i class="ti ti-logout"></i> Cerrar sesión</button>`;
-  } else {
-    dc.innerHTML = `
-      <div class="alert info" style="margin-bottom:14px"><i class="ti ti-info-circle"></i><div class="alert-body">Conectá tu cuenta de Google para guardar y sincronizar tus datos en una hoja de cálculo de Google Sheets automáticamente.</div></div>
-      <button class="btn primary" style="margin-bottom:10px" onclick="startGoogleLogin()"><i class="ti ti-brand-google"></i> Iniciar sesión con Google</button>
-      <button class="btn" onclick="exportJSON()"><i class="ti ti-download"></i> Exportar datos (JSON)</button>`;
-  }
+  const lastExport = localStorage.getItem('mf_last_export');
+  const lastStr = lastExport
+    ? 'Último backup: ' + new Date(lastExport).toLocaleString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' })
+    : 'Nunca exportado';
+  document.getElementById('drive-content').innerHTML = `
+    <div class="alert info" style="margin-bottom:16px">
+      <i class="ti ti-info-circle"></i>
+      <div class="alert-body"><b>${txs.length} movimientos</b> guardados en este dispositivo.<br><span style="font-size:12px;opacity:.8">${lastStr}</span></div>
+    </div>
+
+    <p style="font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px">Exportar</p>
+    <button class="btn primary" style="margin-bottom:8px" onclick="exportXLSX()">
+      <i class="ti ti-file-spreadsheet"></i> Exportar a Excel (.xlsx)
+    </button>
+    <button class="btn" style="margin-bottom:16px" onclick="exportJSON()">
+      <i class="ti ti-file-code"></i> Exportar backup (.json)
+    </button>
+
+    <p style="font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px">Importar / Restaurar</p>
+    <button class="btn" style="margin-bottom:8px" onclick="document.getElementById('import-file').click()">
+      <i class="ti ti-file-upload"></i> Importar desde backup (.json)
+    </button>
+    <div class="alert warning" style="margin-top:10px">
+      <i class="ti ti-alert-circle"></i>
+      <div class="alert-body" style="font-size:12px">La importación <b>reemplaza</b> todos los datos actuales del dispositivo.</div>
+    </div>`;
   document.getElementById('drive-overlay').classList.add('open');
 }
 
 function closeDrive() { document.getElementById('drive-overlay').classList.remove('open'); }
 
-function exportJSON() {
-  const data = { exportedAt: new Date().toISOString(), transactions: txs, budgets };
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-  a.download = 'mis-finanzas-backup.json'; a.click();
-  toast('✓ Datos exportados');
+// ── EXPORT XLSX ───────────────────────────────────────────────────────────────
+function exportXLSX() {
+  if (typeof XLSX === 'undefined') { toast('Cargando librería...'); return; }
+
+  const wb = XLSX.utils.book_new();
+
+  // Hoja 1: Transacciones
+  const txRows = [['Fecha','Tipo','Descripción','Categoría','Monto','Nota']];
+  [...txs].sort((a,b) => b.date.localeCompare(a.date)).forEach(t =>
+    txRows.push([t.date, LABELS[t.type] || t.type, t.desc, t.cat, t.amount, t.note || ''])
+  );
+  const wsTx = XLSX.utils.aoa_to_sheet(txRows);
+  wsTx['!cols'] = [{wch:12},{wch:12},{wch:30},{wch:18},{wch:14},{wch:20}];
+  XLSX.utils.book_append_sheet(wb, wsTx, 'Transacciones');
+
+  // Hoja 2: Presupuestos
+  const bRows = [['Categoría','Límite Mensual ($)']];
+  Object.entries(budgets).forEach(([cat, lim]) => bRows.push([cat, lim]));
+  const wsBudget = XLSX.utils.aoa_to_sheet(bRows);
+  wsBudget['!cols'] = [{wch:20},{wch:20}];
+  XLSX.utils.book_append_sheet(wb, wsBudget, 'Presupuestos');
+
+  // Hoja 3: Resumen mensual
+  const months = [...new Set(txs.map(t => t.date.slice(0,7)))].sort();
+  const sumRows = [['Mes','Ingresos','Gastos','Deudas','Ahorros','Inversiones','Balance neto']];
+  months.forEach(m => {
+    const ts = txs.filter(t => t.date.startsWith(m));
+    const inc  = ts.filter(t => t.type==='income').reduce((s,t)=>s+t.amount,0);
+    const exp  = ts.filter(t => t.type==='expense').reduce((s,t)=>s+t.amount,0);
+    const dbt  = ts.filter(t => t.type==='debt').reduce((s,t)=>s+t.amount,0);
+    const sav  = ts.filter(t => t.type==='savings').reduce((s,t)=>s+t.amount,0);
+    const inv  = ts.filter(t => t.type==='investment').reduce((s,t)=>s+t.amount,0);
+    const [year, mo] = m.split('-');
+    const label = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][+mo-1] + ' ' + year;
+    sumRows.push([label, inc, exp, dbt, sav, inv, inc - exp - dbt]);
+  });
+  const wsSum = XLSX.utils.aoa_to_sheet(sumRows);
+  wsSum['!cols'] = [{wch:12},{wch:14},{wch:14},{wch:14},{wch:14},{wch:14},{wch:14}];
+  XLSX.utils.book_append_sheet(wb, wsSum, 'Resumen mensual');
+
+  // Hoja 4: Análisis por categoría (mes actual)
+  const m = curMonth();
+  const expTxs = monthTxs(m).filter(t => t.type === 'expense');
+  const catMap = {};
+  expTxs.forEach(t => { catMap[t.cat] = (catMap[t.cat]||0) + t.amount; });
+  const totalExp = Object.values(catMap).reduce((s,v)=>s+v,0);
+  const catRows = [['Categoría','Gasto del mes ($)','% del total','Presupuesto ($)','Diferencia ($)']];
+  Object.entries(catMap).sort((a,b)=>b[1]-a[1]).forEach(([cat, amt]) => {
+    const lim = budgets[cat] || 0;
+    catRows.push([cat, amt, totalExp > 0 ? +(amt/totalExp*100).toFixed(1) : 0, lim || '', lim ? lim - amt : '']);
+  });
+  const wsCat = XLSX.utils.aoa_to_sheet(catRows);
+  wsCat['!cols'] = [{wch:18},{wch:18},{wch:14},{wch:16},{wch:16}];
+  XLSX.utils.book_append_sheet(wb, wsCat, 'Categorías (mes actual)');
+
+  const fecha = new Date().toISOString().slice(0,10);
+  XLSX.writeFile(wb, `mis-finanzas-${fecha}.xlsx`);
+  localStorage.setItem('mf_last_export', new Date().toISOString());
+  toast('✓ Excel exportado');
   closeDrive();
 }
 
-function startGoogleLogin() {
-  if (window.gAuth) { window.gAuth.signIn(); } 
-  else { toast('Configurá tu CLIENT_ID en google-auth.js para activar Drive'); }
+// ── EXPORT JSON (backup completo) ─────────────────────────────────────────────
+function exportJSON() {
+  const data = { version: 2, exportedAt: new Date().toISOString(), transactions: txs, budgets };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `mis-finanzas-backup-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  localStorage.setItem('mf_last_export', new Date().toISOString());
+  toast('✓ Backup exportado');
+  closeDrive();
 }
 
-async function syncToSheets() {
-  if (!window.gAuth || !window.gAuth.isSignedIn()) { toast('Iniciá sesión primero'); return; }
-  toast('Sincronizando...');
-  try {
-    await window.gAuth.syncToSheets(txs, budgets);
-    toast('✓ Sincronizado con Google Sheets');
-    closeDrive();
-  } catch(e) {
-    toast('Error al sincronizar: ' + e.message);
-  }
+// ── IMPORT JSON ───────────────────────────────────────────────────────────────
+function handleImportFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!data.transactions || !Array.isArray(data.transactions))
+        throw new Error('Formato inválido');
+      if (!confirm(`¿Restaurar ${data.transactions.length} movimientos desde el backup del ${new Date(data.exportedAt).toLocaleDateString('es-AR')}?\n\nEsto reemplazará los datos actuales.`))
+        return;
+      txs = data.transactions;
+      budgets = data.budgets || {};
+      persist();
+      renderDashboard();
+      closeDrive();
+      toast(`✓ ${txs.length} movimientos restaurados`);
+    } catch(err) {
+      toast('⚠️ Archivo inválido o dañado');
+    }
+    input.value = '';
+  };
+  reader.readAsText(file);
 }
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
