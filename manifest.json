@@ -1,0 +1,36 @@
+{
+  "name": "Mis Finanzas Personales",
+  "short_name": "MisFinanzas",
+  "description": "Gestión de finanzas personales con sync a Google Drive",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#1D9E75",
+  "lang": "es",
+  "categories": ["finance", "productivity"],
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "Agregar gasto",
+      "short_name": "Gasto",
+      "description": "Registrar un nuevo gasto",
+      "url": "/?screen=add",
+      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}
