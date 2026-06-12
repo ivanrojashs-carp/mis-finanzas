@@ -102,6 +102,24 @@
   .section-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .5px; margin: 16px 0 8px; }
   .delete-btn { background: none; border: none; cursor: pointer; color: var(--text-muted); padding: 6px; border-radius: 6px; }
   .delete-btn:active { color: var(--red); }
+  /* Badge de alerta en navbar */
+  .nav-badge { position: relative; }
+  .nav-badge::after { content: ''; position: absolute; top: 6px; right: calc(50% - 14px); width: 8px; height: 8px; background: var(--red); border-radius: 50%; border: 2px solid var(--surface); animation: pulse-badge 1.5s infinite; }
+  @keyframes pulse-badge { 0%,100%{transform:scale(1);opacity:1} 50%{transform:scale(1.3);opacity:.7} }
+  /* Tarjeta de crédito card */
+  .cc-card { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%); border-radius: var(--radius); padding: 18px; color: #fff; margin-bottom: 12px; position: relative; overflow: hidden; }
+  .cc-card::before { content:''; position:absolute; top:-30px; right:-30px; width:120px; height:120px; border-radius:50%; background:rgba(255,255,255,.05); }
+  .cc-card::after { content:''; position:absolute; bottom:-40px; left:-20px; width:150px; height:150px; border-radius:50%; background:rgba(255,255,255,.04); }
+  .cc-name { font-size:15px; font-weight:600; margin-bottom:4px; }
+  .cc-saldo { font-size:26px; font-weight:700; margin:10px 0 4px; }
+  .cc-meta { font-size:12px; opacity:.7; }
+  .cc-actions { display:flex; gap:8px; margin-top:14px; position:relative; z-index:1; }
+  .cc-btn { flex:1; padding:8px; border-radius:8px; border:1px solid rgba(255,255,255,.3); background:rgba(255,255,255,.1); color:#fff; cursor:pointer; font-size:13px; text-align:center; }
+  .cc-btn:active { background:rgba(255,255,255,.2); }
+  /* Simulador */
+  .sim-result { background: var(--blue-bg); border-radius: var(--radius-sm); padding: 14px; margin-top: 14px; }
+  .sim-month-row { display:flex; justify-content:space-between; padding:6px 0; border-bottom:0.5px solid var(--border); font-size:13px; }
+  .sim-month-row:last-child { border-bottom:none; font-weight:600; }
   /* Modal */
   .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 200; align-items: flex-end; }
   .overlay.open { display: flex; }
@@ -238,6 +256,40 @@
         <div id="an-plan"></div>
       </div>
     </div>
+    <!-- TARJETAS -->
+    <div class="screen" id="s-cards">
+      <p style="font-size:17px;font-weight:600;margin-bottom:4px">Tarjetas de Crédito</p>
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Saldos, vencimientos y pagos</p>
+      <div id="cards-list"></div>
+      <button class="btn primary" onclick="openCardModal()"><i class="ti ti-plus"></i> Nueva tarjeta</button>
+
+      <div class="card" style="margin-top:12px">
+        <div class="card-title">Simulador de cuotas</div>
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px">Calculá el impacto de una compra en cuotas sobre tus próximos meses</p>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Monto total ($)</label>
+            <input id="sim-total" type="number" inputmode="decimal" placeholder="0" oninput="calcSim()">
+          </div>
+          <div class="form-group">
+            <label>Cantidad de cuotas</label>
+            <input id="sim-cuotas" type="number" inputmode="numeric" placeholder="12" min="1" max="60" oninput="calcSim()">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Tasa mensual (%)</label>
+            <input id="sim-tasa" type="number" inputmode="decimal" placeholder="0" step="0.1" oninput="calcSim()">
+          </div>
+          <div class="form-group">
+            <label>Primer cuota</label>
+            <input id="sim-start" type="month" oninput="calcSim()">
+          </div>
+        </div>
+        <div id="sim-result"></div>
+      </div>
+    </div>
+
     <!-- CONFIGURACIÓN -->
     <div class="screen" id="s-settings">
       <p style="font-size:17px;font-weight:600;margin-bottom:4px">Configuración</p>
@@ -283,11 +335,47 @@
   <nav class="navbar">
     <button class="active" id="nav-dashboard" onclick="goto('dashboard')"><i class="ti ti-layout-dashboard"></i>Inicio</button>
     <button id="nav-add" onclick="goto('add')"><i class="ti ti-plus"></i>Agregar</button>
-    <button id="nav-history" onclick="goto('history')"><i class="ti ti-list"></i>Historial</button>
+    <button id="nav-cards" onclick="goto('cards')"><i class="ti ti-credit-card"></i>Tarjetas</button>
     <button id="nav-budget" onclick="goto('budget')"><i class="ti ti-target"></i>Metas</button>
     <button id="nav-analysis" onclick="goto('analysis')"><i class="ti ti-chart-pie"></i>Análisis</button>
     <button id="nav-settings" onclick="goto('settings')"><i class="ti ti-settings"></i>Config</button>
   </nav>
+</div>
+
+<!-- Modal Nueva/Editar Tarjeta -->
+<div class="overlay" id="card-modal" onclick="if(event.target===this)closeCardModal()">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="card-modal-title">Nueva tarjeta</div>
+    <input type="hidden" id="cm-id">
+    <div class="form-group"><label>Nombre de la tarjeta</label><input id="cm-name" type="text" placeholder="Ej: Visa Santander"></div>
+    <div class="form-row">
+      <div class="form-group"><label>Saldo total ($)</label><input id="cm-saldo" type="number" inputmode="decimal" placeholder="0"></div>
+      <div class="form-group"><label>Límite ($)</label><input id="cm-limite" type="number" inputmode="decimal" placeholder="0"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Día de cierre</label><input id="cm-cierre" type="number" inputmode="numeric" min="1" max="31" placeholder="Ej: 25"></div>
+      <div class="form-group"><label>Día de vencimiento</label><input id="cm-venc" type="number" inputmode="numeric" min="1" max="31" placeholder="Ej: 5"></div>
+    </div>
+    <div class="form-group"><label>Pago mínimo (%)</label><input id="cm-minpct" type="number" inputmode="decimal" placeholder="5" step="0.1"></div>
+    <button class="btn primary" style="margin-bottom:8px" onclick="saveCard()"><i class="ti ti-check"></i> Guardar tarjeta</button>
+    <button class="btn" onclick="closeCardModal()">Cancelar</button>
+  </div>
+</div>
+
+<!-- Modal Registrar Pago -->
+<div class="overlay" id="pay-modal" onclick="if(event.target===this)closePayModal()">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Registrar pago</div>
+    <p id="pay-card-name" style="font-size:13px;color:var(--text-muted);margin-bottom:16px"></p>
+    <input type="hidden" id="pm-card-id">
+    <div class="form-group"><label>Monto a pagar ($)</label><input id="pm-amount" type="number" inputmode="decimal" placeholder="0"></div>
+    <div class="form-group"><label>Fecha del pago</label><input id="pm-date" type="date"></div>
+    <div class="form-group"><label>Nota</label><input id="pm-note" type="text" placeholder="Ej: Pago mínimo, pago total..." autocomplete="off"></div>
+    <button class="btn primary" style="margin-bottom:8px" onclick="saveCardPayment()"><i class="ti ti-check"></i> Registrar pago</button>
+    <button class="btn" onclick="closePayModal()">Cancelar</button>
+  </div>
 </div>
 
 <!-- Modal Datos -->
@@ -328,6 +416,7 @@ const PAL = ['#1D9E75','#185FA5','#534AB7','#BA7517','#E24B4A','#0F6E56','#0C447
 // ─── STATE ───────────────────────────────────────────────────────────────────
 let txs = JSON.parse(localStorage.getItem('mf_txs') || '[]');
 let budgets = JSON.parse(localStorage.getItem('mf_budgets') || '{}');
+let cards = JSON.parse(localStorage.getItem('mf_cards') || '[]');
 let currentType = 'expense';
 let histFilter = 'all';
 let pieInst = null, barInst = null;
@@ -335,6 +424,7 @@ let pieInst = null, barInst = null;
 function persist() {
   localStorage.setItem('mf_txs', JSON.stringify(txs));
   localStorage.setItem('mf_budgets', JSON.stringify(budgets));
+  localStorage.setItem('mf_cards', JSON.stringify(cards));
   localStorage.setItem('mf_custom_cats', JSON.stringify(customCats));
   localStorage.setItem('mf_colors', JSON.stringify(userColors));
 }
@@ -367,10 +457,24 @@ function goto(id) {
   document.getElementById('s-' + id).classList.add('active');
   document.getElementById('nav-' + id).classList.add('active');
   if (id === 'dashboard') renderDashboard();
-  if (id === 'history') renderHistory();
+  if (id === 'cards') renderCards();
   if (id === 'budget') renderBudget();
   if (id === 'analysis') renderAnalysis();
   if (id === 'settings') renderSettings();
+}
+
+// Badge de alerta en tarjetas si hay vencimiento próximo
+function updateCardsBadge() {
+  const today = new Date().getDate();
+  const hasDue = cards.some(c => {
+    const d = c.venc;
+    if (!d) return false;
+    const daysUntil = d >= today ? d - today : (31 - today) + d;
+    return daysUntil <= 5 && c.saldo > 0;
+  });
+  const btn = document.getElementById('nav-cards');
+  if (hasDue) btn.classList.add('nav-badge');
+  else btn.classList.remove('nav-badge');
 }
 
 // ─── TOPBAR ──────────────────────────────────────────────────────────────────
@@ -396,7 +500,7 @@ function renderDashboard() {
   rateEl.textContent = rate !== null ? rate + '%' : '—';
   rateEl.className = 'metric-value ' + (rate === null ? '' : rate < 60 ? 'green' : rate < 85 ? 'amber' : 'red');
 
-  // Alerts
+  // Alerts financieras
   const alerts = [];
   if (income === 0) alerts.push({ t: 'info', i: 'ti-info-circle', msg: '<b>Registrá tus ingresos</b> del mes para activar el análisis inteligente.' });
   if (rate !== null && rate > 85) alerts.push({ t: 'danger', i: 'ti-alert-triangle', msg: `<b>¡Alerta!</b> Estás gastando el ${rate}% de tus ingresos este mes.` });
@@ -408,9 +512,22 @@ function renderDashboard() {
     if (pct >= 100) alerts.push({ t: 'danger', i: 'ti-target-off', msg: `<b>${cat}</b>: superaste el presupuesto (${fmt(spent)} / ${fmt(lim)})` });
     else if (pct >= 80) alerts.push({ t: 'warning', i: 'ti-target', msg: `<b>${cat}</b>: al ${Math.round(pct)}% del presupuesto mensual` });
   });
+
+  // Alertas de vencimiento de tarjetas
+  const today = new Date().getDate();
+  cards.forEach(c => {
+    if (!c.venc || c.saldo <= 0) return;
+    const daysUntil = c.venc >= today ? c.venc - today : (31 - today) + c.venc;
+    if (daysUntil === 0) alerts.unshift({ t: 'danger', i: 'ti-credit-card', msg: `<b>¡Hoy vence ${c.name}!</b> Saldo pendiente: ${fmt(c.saldo)}` });
+    else if (daysUntil <= 3) alerts.unshift({ t: 'danger', i: 'ti-credit-card', msg: `<b>${c.name}</b> vence en <b>${daysUntil} días</b> (día ${c.venc}). Saldo: ${fmt(c.saldo)}` });
+    else if (daysUntil <= 7) alerts.unshift({ t: 'warning', i: 'ti-credit-card', msg: `<b>${c.name}</b> vence el día <b>${c.venc}</b> (en ${daysUntil} días). Saldo: ${fmt(c.saldo)}` });
+  });
+
   document.getElementById('d-alerts').innerHTML = alerts.map(a =>
     `<div class="alert ${a.t}"><i class="ti ${a.i}"></i><div class="alert-body">${a.msg}</div></div>`
   ).join('');
+
+  updateCardsBadge();
 
   // Pie
   const catMap = {};
@@ -764,6 +881,218 @@ function handleImportFile(input) {
   reader.readAsText(file);
 }
 
+// ─── TARJETAS DE CRÉDITO ──────────────────────────────────────────────────────
+function renderCards() {
+  const el = document.getElementById('cards-list');
+  if (!cards.length) {
+    el.innerHTML = '<div class="empty" style="padding:30px 20px"><i class="ti ti-credit-card"></i><p>No tenés tarjetas cargadas</p></div>';
+  } else {
+    el.innerHTML = cards.map(c => cardHTML(c)).join('');
+  }
+  // Inicializar simulador con mes actual
+  const simStart = document.getElementById('sim-start');
+  if (!simStart.value) simStart.value = curMonth();
+}
+
+function cardHTML(c) {
+  const today = new Date().getDate();
+  const daysUntilVenc = c.venc ? (c.venc >= today ? c.venc - today : (31 - today) + c.venc) : null;
+  const daysUntilCierre = c.cierre ? (c.cierre >= today ? c.cierre - today : (31 - today) + c.cierre) : null;
+  const usoPct = c.limite > 0 ? Math.min((c.saldo / c.limite) * 100, 100) : 0;
+  const vencAlert = daysUntilVenc !== null && daysUntilVenc <= 5 && c.saldo > 0;
+  const minPago = c.saldo > 0 && c.minpct ? c.saldo * (c.minpct / 100) : 0;
+
+  return `<div class="cc-card" style="${vencAlert ? 'box-shadow:0 0 0 2px var(--red),0 4px 20px rgba(226,75,74,.3)' : ''}">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;position:relative;z-index:1">
+      <div>
+        <div class="cc-name">${c.name} ${vencAlert ? '🔴' : ''}</div>
+        <div class="cc-meta">
+          ${c.cierre ? `Cierre: día ${c.cierre}${daysUntilCierre !== null ? ` (en ${daysUntilCierre}d)` : ''}` : ''}
+          ${c.cierre && c.venc ? ' · ' : ''}
+          ${c.venc ? `Vence: día ${c.venc}${daysUntilVenc !== null ? ` (en ${daysUntilVenc}d)` : ''}` : ''}
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;position:relative;z-index:1">
+        <button class="cc-btn" style="padding:6px 10px" onclick="openCardModal('${c.id}')"><i class="ti ti-edit" style="font-size:15px"></i></button>
+        <button class="cc-btn" style="padding:6px 10px;border-color:rgba(226,75,74,.5);color:#ff8080" onclick="deleteCard('${c.id}')"><i class="ti ti-trash" style="font-size:15px"></i></button>
+      </div>
+    </div>
+    <div class="cc-saldo">${fmt(c.saldo)}</div>
+    <div class="cc-meta" style="margin-bottom:6px">
+      Saldo pendiente${c.limite ? ` · Límite: ${fmt(c.limite)}` : ''}
+      ${minPago > 0 ? ` · Pago mínimo: ${fmt(minPago)}` : ''}
+    </div>
+    ${c.limite > 0 ? `
+      <div style="height:4px;background:rgba(255,255,255,.2);border-radius:2px;margin-bottom:12px;position:relative;z-index:1">
+        <div style="height:100%;width:${usoPct}%;background:${usoPct > 80 ? '#ff6b6b' : usoPct > 50 ? '#ffd93d' : '#6bcb77'};border-radius:2px"></div>
+      </div>` : '<div style="margin-bottom:12px"></div>'}
+    <div class="cc-actions">
+      <button class="cc-btn" onclick="openPayModal('${c.id}')"><i class="ti ti-cash"></i> Registrar pago</button>
+      <button class="cc-btn" onclick="toggleCardHistory('${c.id}')"><i class="ti ti-history"></i> Historial</button>
+    </div>
+    <div id="card-hist-${c.id}" style="display:none;margin-top:12px;position:relative;z-index:1">
+      ${cardHistoryHTML(c)}
+    </div>
+  </div>`;
+}
+
+function cardHistoryHTML(c) {
+  const pagos = (c.payments || []).slice().reverse().slice(0, 8);
+  if (!pagos.length) return '<p style="font-size:12px;opacity:.6;text-align:center;padding:8px">Sin pagos registrados</p>';
+  return pagos.map(p => `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.1);font-size:13px">
+      <div><span style="opacity:.8">${p.date}</span>${p.note ? ` · <span style="opacity:.6">${p.note}</span>` : ''}</div>
+      <div style="font-weight:600;color:#6bcb77">-${fmt(p.amount)}</div>
+    </div>`).join('');
+}
+
+function toggleCardHistory(id) {
+  const el = document.getElementById('card-hist-' + id);
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+function openCardModal(id) {
+  const c = id ? cards.find(x => x.id === id) : null;
+  document.getElementById('card-modal-title').textContent = c ? 'Editar tarjeta' : 'Nueva tarjeta';
+  document.getElementById('cm-id').value = c ? c.id : '';
+  document.getElementById('cm-name').value = c ? c.name : '';
+  document.getElementById('cm-saldo').value = c ? c.saldo : '';
+  document.getElementById('cm-limite').value = c ? (c.limite || '') : '';
+  document.getElementById('cm-cierre').value = c ? (c.cierre || '') : '';
+  document.getElementById('cm-venc').value = c ? (c.venc || '') : '';
+  document.getElementById('cm-minpct').value = c ? (c.minpct || '5') : '5';
+  document.getElementById('card-modal').classList.add('open');
+}
+
+function closeCardModal() { document.getElementById('card-modal').classList.remove('open'); }
+
+function saveCard() {
+  const id = document.getElementById('cm-id').value;
+  const name = document.getElementById('cm-name').value.trim();
+  const saldo = parseFloat(document.getElementById('cm-saldo').value) || 0;
+  if (!name) { toast('⚠️ Ingresá el nombre de la tarjeta'); return; }
+  const data = {
+    id: id || String(Date.now()),
+    name,
+    saldo,
+    limite: parseFloat(document.getElementById('cm-limite').value) || 0,
+    cierre: parseInt(document.getElementById('cm-cierre').value) || null,
+    venc: parseInt(document.getElementById('cm-venc').value) || null,
+    minpct: parseFloat(document.getElementById('cm-minpct').value) || 5,
+    payments: id ? (cards.find(c => c.id === id)?.payments || []) : []
+  };
+  if (id) cards = cards.map(c => c.id === id ? data : c);
+  else cards.push(data);
+  persist();
+  closeCardModal();
+  renderCards();
+  updateCardsBadge();
+  toast(id ? '✓ Tarjeta actualizada' : '✓ Tarjeta guardada');
+}
+
+function deleteCard(id) {
+  const c = cards.find(x => x.id === id);
+  if (!confirm(`¿Eliminar la tarjeta "${c?.name}"?`)) return;
+  cards = cards.filter(x => x.id !== id);
+  persist();
+  renderCards();
+  updateCardsBadge();
+  toast('✓ Tarjeta eliminada');
+}
+
+function openPayModal(cardId) {
+  const c = cards.find(x => x.id === cardId);
+  document.getElementById('pm-card-id').value = cardId;
+  document.getElementById('pay-card-name').textContent = `${c.name} · Saldo actual: ${fmt(c.saldo)}`;
+  document.getElementById('pm-amount').value = '';
+  document.getElementById('pm-date').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('pm-note').value = '';
+  document.getElementById('pay-modal').classList.add('open');
+}
+
+function closePayModal() { document.getElementById('pay-modal').classList.remove('open'); }
+
+function saveCardPayment() {
+  const cardId = document.getElementById('pm-card-id').value;
+  const amount = parseFloat(document.getElementById('pm-amount').value);
+  const date = document.getElementById('pm-date').value;
+  const note = document.getElementById('pm-note').value.trim();
+  if (!amount || amount <= 0 || !date) { toast('⚠️ Completá monto y fecha'); return; }
+  cards = cards.map(c => {
+    if (c.id !== cardId) return c;
+    const newSaldo = Math.max(0, c.saldo - amount);
+    const payments = [...(c.payments || []), { amount, date, note }];
+    return { ...c, saldo: newSaldo, payments };
+  });
+  persist();
+  closePayModal();
+  renderCards();
+  updateCardsBadge();
+  toast('✓ Pago registrado');
+}
+
+// ─── SIMULADOR DE CUOTAS ──────────────────────────────────────────────────────
+function calcSim() {
+  const total = parseFloat(document.getElementById('sim-total').value);
+  const cuotas = parseInt(document.getElementById('sim-cuotas').value);
+  const tasa = parseFloat(document.getElementById('sim-tasa').value) || 0;
+  const startVal = document.getElementById('sim-start').value;
+  const el = document.getElementById('sim-result');
+  if (!total || !cuotas || !startVal) { el.innerHTML = ''; return; }
+
+  // Cálculo de cuota con o sin interés
+  let cuotaVal;
+  if (tasa > 0) {
+    const r = tasa / 100;
+    cuotaVal = total * (r * Math.pow(1 + r, cuotas)) / (Math.pow(1 + r, cuotas) - 1);
+  } else {
+    cuotaVal = total / cuotas;
+  }
+  const totalPagar = cuotaVal * cuotas;
+  const interes = totalPagar - total;
+
+  // Calcular impacto mes a mes
+  const [sy, sm] = startVal.split('-').map(Number);
+  const rows = [];
+  for (let i = 0; i < Math.min(cuotas, 24); i++) {
+    const d = new Date(sy, sm - 1 + i);
+    const label = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][d.getMonth()] + ' ' + d.getFullYear();
+    const mKey = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    const { income, expense } = monthStats(mKey);
+    const balance = income - expense - cuotaVal;
+    rows.push({ label, cuota: cuotaVal, income, expense, balance, mKey });
+  }
+  const hasDeficit = rows.some(r => r.balance < 0);
+
+  el.innerHTML = `
+    <div class="sim-result">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px">
+        <div style="text-align:center">
+          <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;margin-bottom:4px">Cuota</div>
+          <div style="font-size:17px;font-weight:700;color:var(--blue)">${fmt(cuotaVal)}</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;margin-bottom:4px">Total a pagar</div>
+          <div style="font-size:17px;font-weight:700">${fmt(totalPagar)}</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;margin-bottom:4px">Intereses</div>
+          <div style="font-size:17px;font-weight:700;color:${interes > 0 ? 'var(--red)' : 'var(--green)'}">${fmt(interes)}</div>
+        </div>
+      </div>
+      ${hasDeficit ? `<div class="alert danger" style="margin-bottom:12px"><i class="ti ti-alert-triangle"></i><div class="alert-body">Algún mes quedarías en <b>déficit</b> al sumar esta cuota. Revisá tus ingresos.</div></div>` : ''}
+      <p style="font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Impacto por mes</p>
+      ${rows.map(r => `
+        <div class="sim-month-row">
+          <span>${r.label}</span>
+          <span style="color:var(--text-muted)">${fmt(r.cuotaVal || cuotaVal)}/cuota</span>
+          <span style="color:${r.balance >= 0 ? 'var(--green)' : 'var(--red)'}">
+            ${r.income > 0 ? (r.balance >= 0 ? '+' : '') + fmt(r.balance) : '—'}
+          </span>
+        </div>`).join('')}
+    </div>`;
+}
+
 // ─── SETTINGS — COLORES Y CATEGORÍAS ─────────────────────────────────────────
 function renderSettings() {
   // Color pickers
@@ -848,6 +1177,8 @@ function renderCustomCatList() {
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 document.getElementById('f-date').value = new Date().toISOString().slice(0, 10);
+document.getElementById('pm-date').value = new Date().toISOString().slice(0, 10);
+document.getElementById('sim-start').value = curMonth();
 renderCats();
 updateTopbar();
 
@@ -864,9 +1195,18 @@ if (txs.length === 0) {
     {id:7,type:'savings',desc:'Fondo emergencia',amount:30000,date:m+'-01',cat:'Fondo emergencia',note:''},
   ];
   budgets = { Comida: 50000, Entretenimiento: 10000, Ropa: 20000, Salud: 40000 };
+  // Demo tarjeta
+  if (!cards.length) {
+    cards = [{
+      id: 'demo1', name: 'Visa Santander', saldo: 180000, limite: 500000,
+      cierre: 25, venc: 5, minpct: 5,
+      payments: [{ amount: 50000, date: curMonth() + '-01', note: 'Pago parcial' }]
+    }];
+  }
   persist();
 }
 renderDashboard();
+updateCardsBadge();
 
 // Service Worker
 if ('serviceWorker' in navigator) {
