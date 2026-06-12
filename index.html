@@ -238,6 +238,46 @@
         <div id="an-plan"></div>
       </div>
     </div>
+    <!-- CONFIGURACIÓN -->
+    <div class="screen" id="s-settings">
+      <p style="font-size:17px;font-weight:600;margin-bottom:4px">Configuración</p>
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Colores y categorías personalizadas</p>
+
+      <!-- Colores por tipo -->
+      <div class="card">
+        <div class="card-title">Colores por tipo de movimiento</div>
+        <div id="color-pickers"></div>
+        <button class="btn" style="margin-top:10px;color:var(--text-muted);font-size:13px" onclick="resetColors()">
+          <i class="ti ti-refresh"></i> Restaurar colores por defecto
+        </button>
+      </div>
+
+      <!-- Categorías personalizadas -->
+      <div class="card">
+        <div class="card-title">Agregar categoría personalizada</div>
+        <div class="form-group">
+          <label>Tipo</label>
+          <select id="nc-type" style="width:100%;padding:10px 13px;border:0.5px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font-size:15px">
+            <option value="expense">Gasto</option>
+            <option value="income">Ingreso</option>
+            <option value="savings">Ahorro</option>
+            <option value="debt">Deuda</option>
+            <option value="investment">Inversión</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Nombre de la categoría</label>
+          <input id="nc-name" type="text" placeholder="Ej: Mascota, Gimnasio..." autocomplete="off">
+        </div>
+        <button class="btn primary" onclick="addCustomCat()"><i class="ti ti-plus"></i> Agregar</button>
+      </div>
+
+      <!-- Lista de categorías personalizadas -->
+      <div class="card">
+        <div class="card-title">Mis categorías personalizadas</div>
+        <div id="custom-cat-list"></div>
+      </div>
+    </div>
   </div>
 
   <nav class="navbar">
@@ -246,6 +286,7 @@
     <button id="nav-history" onclick="goto('history')"><i class="ti ti-list"></i>Historial</button>
     <button id="nav-budget" onclick="goto('budget')"><i class="ti ti-target"></i>Metas</button>
     <button id="nav-analysis" onclick="goto('analysis')"><i class="ti ti-chart-pie"></i>Análisis</button>
+    <button id="nav-settings" onclick="goto('settings')"><i class="ti ti-settings"></i>Config</button>
   </nav>
 </div>
 
@@ -264,15 +305,23 @@
 <script src="google-auth.js"></script>
 <script>
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
-const CATS = {
-  expense:  ['Comida','Transporte','Vivienda','Salud','Ropa','Educación','Entretenimiento','Servicios','Impuestos','Otros'],
+const DEFAULT_CATS = {
+  expense:  ['Comida','Transporte','Vivienda','Salud','Ropa','Educación','Entretenimiento','Servicios','Tarjeta de crédito','Impuestos','Otros'],
   income:   ['Sueldo','Freelance','Renta','Bono','Inversión','Otros'],
   savings:  ['Fondo emergencia','Vacaciones','Tecnología','Educación','Retiro','Otros'],
   debt:     ['Tarjeta','Préstamo','Cuota','Hipoteca','Otros'],
   investment:['FCI','Acciones','Cripto','Plazo fijo','Dólar','Otros']
 };
+// Categorías personalizadas del usuario (se suman a las default)
+let customCats = JSON.parse(localStorage.getItem('mf_custom_cats') || '{"expense":[],"income":[],"savings":[],"debt":[],"investment":[]}');
+const CATS = new Proxy({}, { get: (_, t) => [...(DEFAULT_CATS[t]||[]), ...(customCats[t]||[])] });
+
 const ICONS = { expense:'ti-shopping-cart', income:'ti-wallet', savings:'ti-piggy-bank', debt:'ti-credit-card', investment:'ti-trending-up' };
-const COLORS = { expense:'#E24B4A', income:'#1D9E75', savings:'#185FA5', debt:'#BA7517', investment:'#534AB7' };
+const DEFAULT_COLORS = { expense:'#E24B4A', income:'#1D9E75', savings:'#185FA5', debt:'#BA7517', investment:'#534AB7' };
+// Colores personalizables por el usuario
+let userColors = JSON.parse(localStorage.getItem('mf_colors') || 'null') || {...DEFAULT_COLORS};
+// COLORS es siempre el objeto activo
+let COLORS = {...userColors};
 const LABELS = { expense:'Gasto', income:'Ingreso', savings:'Ahorro', debt:'Deuda', investment:'Inversión' };
 const PAL = ['#1D9E75','#185FA5','#534AB7','#BA7517','#E24B4A','#0F6E56','#0C447C','#3C3489','#633806','#A32D2D'];
 
@@ -286,6 +335,8 @@ let pieInst = null, barInst = null;
 function persist() {
   localStorage.setItem('mf_txs', JSON.stringify(txs));
   localStorage.setItem('mf_budgets', JSON.stringify(budgets));
+  localStorage.setItem('mf_custom_cats', JSON.stringify(customCats));
+  localStorage.setItem('mf_colors', JSON.stringify(userColors));
 }
 
 // ─── UTILS ───────────────────────────────────────────────────────────────────
@@ -319,6 +370,7 @@ function goto(id) {
   if (id === 'history') renderHistory();
   if (id === 'budget') renderBudget();
   if (id === 'analysis') renderAnalysis();
+  if (id === 'settings') renderSettings();
 }
 
 // ─── TOPBAR ──────────────────────────────────────────────────────────────────
@@ -481,10 +533,24 @@ function renderBudget() {
     const pct = lim > 0 ? Math.min((spent / lim) * 100, 100) : 0;
     const color = pct >= 100 ? 'var(--red)' : pct >= 80 ? 'var(--amber)' : 'var(--green)';
     return `<div class="budget-row">
-      <div class="budget-header"><span style="font-weight:500">${cat}</span><span style="color:var(--text-muted)">${fmt(spent)}${lim ? ' / ' + fmt(lim) : ''}</span></div>
+      <div class="budget-header">
+        <span style="font-weight:500">${cat}</span>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="color:var(--text-muted)">${fmt(spent)}${lim ? ' / ' + fmt(lim) : ''}</span>
+          ${lim ? `<button class="delete-btn" title="Eliminar presupuesto" onclick="deleteBudget('${cat}')"><i class="ti ti-trash"></i></button>` : ''}
+        </div>
+      </div>
       ${lim ? `<div class="progress-wrap"><div class="progress-bar" style="width:${pct}%;background:${color}"></div></div>` : '<p style="font-size:12px;color:var(--text-muted)">Sin presupuesto</p>'}
     </div>`;
   }).join('');
+}
+
+function deleteBudget(cat) {
+  if (!confirm(`¿Eliminar el presupuesto de "${cat}"?`)) return;
+  delete budgets[cat];
+  persist();
+  renderBudget();
+  toast(`✓ Presupuesto de ${cat} eliminado`);
 }
 
 function saveBudget() {
@@ -509,8 +575,8 @@ function renderAnalysis() {
   barInst = new Chart(document.getElementById('bar-chart'), {
     type: 'bar',
     data: { labels, datasets: [
-      { label: 'Ingresos', data: incData, backgroundColor: '#1D9E75', borderRadius: 4 },
-      { label: 'Gastos', data: expData, backgroundColor: '#E24B4A', borderRadius: 4 }
+      { label: 'Ingresos', data: incData, backgroundColor: COLORS.income, borderRadius: 4 },
+      { label: 'Gastos', data: expData, backgroundColor: COLORS.expense, borderRadius: 4 }
     ]},
     options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
       scales: { y: { ticks: { callback: v => '$' + Math.round(v).toLocaleString('es-AR') } } } }
@@ -696,6 +762,88 @@ function handleImportFile(input) {
     input.value = '';
   };
   reader.readAsText(file);
+}
+
+// ─── SETTINGS — COLORES Y CATEGORÍAS ─────────────────────────────────────────
+function renderSettings() {
+  // Color pickers
+  const types = ['expense','income','savings','debt','investment'];
+  document.getElementById('color-pickers').innerHTML = types.map(t => `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:0.5px solid var(--border)">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="width:34px;height:34px;border-radius:50%;background:${COLORS[t]};display:flex;align-items:center;justify-content:center">
+          <i class="ti ${ICONS[t]}" style="color:#fff;font-size:16px"></i>
+        </div>
+        <span style="font-size:14px;font-weight:500">${LABELS[t]}</span>
+      </div>
+      <input type="color" value="${COLORS[t]}" data-type="${t}" onchange="updateColor(this)"
+        style="width:40px;height:34px;border:0.5px solid var(--border);border-radius:8px;cursor:pointer;background:none;padding:2px">
+    </div>`).join('');
+
+  // Categorías personalizadas
+  renderCustomCatList();
+}
+
+function updateColor(input) {
+  const t = input.dataset.type;
+  COLORS[t] = input.value;
+  userColors[t] = input.value;
+  persist();
+  toast('✓ Color actualizado');
+}
+
+function resetColors() {
+  Object.assign(COLORS, DEFAULT_COLORS);
+  Object.assign(userColors, DEFAULT_COLORS);
+  persist();
+  renderSettings();
+  toast('✓ Colores restaurados');
+}
+
+function addCustomCat() {
+  const type = document.getElementById('nc-type').value;
+  const name = document.getElementById('nc-name').value.trim();
+  if (!name) { toast('⚠️ Ingresá un nombre'); return; }
+  if (DEFAULT_CATS[type].includes(name) || (customCats[type]||[]).includes(name)) {
+    toast('⚠️ Esa categoría ya existe'); return;
+  }
+  if (!customCats[type]) customCats[type] = [];
+  customCats[type].push(name);
+  persist();
+  document.getElementById('nc-name').value = '';
+  renderCustomCatList();
+  renderCats(); // refrescar chips en pantalla Agregar
+  toast(`✓ Categoría "${name}" agregada`);
+}
+
+function deleteCustomCat(type, name) {
+  customCats[type] = (customCats[type]||[]).filter(c => c !== name);
+  persist();
+  renderCustomCatList();
+  renderCats();
+  toast(`✓ Categoría eliminada`);
+}
+
+function renderCustomCatList() {
+  const types = ['expense','income','savings','debt','investment'];
+  const hasCats = types.some(t => (customCats[t]||[]).length > 0);
+  const el = document.getElementById('custom-cat-list');
+  if (!hasCats) {
+    el.innerHTML = '<div class="empty" style="padding:20px"><i class="ti ti-tag"></i><p>No hay categorías personalizadas</p></div>';
+    return;
+  }
+  el.innerHTML = types.map(t => {
+    const cats = customCats[t] || [];
+    if (!cats.length) return '';
+    return `<div style="margin-bottom:12px">
+      <p style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">${LABELS[t]}</p>
+      ${cats.map(c => `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:0.5px solid var(--border)">
+          <span style="font-size:14px">${c}</span>
+          <button class="delete-btn" onclick="deleteCustomCat('${t}','${c}')"><i class="ti ti-trash"></i></button>
+        </div>`).join('')}
+    </div>`;
+  }).join('');
 }
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
