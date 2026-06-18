@@ -120,6 +120,15 @@
   .sim-result { background: var(--blue-bg); border-radius: var(--radius-sm); padding: 14px; margin-top: 14px; }
   .sim-month-row { display:flex; justify-content:space-between; padding:6px 0; border-bottom:0.5px solid var(--border); font-size:13px; }
   .sim-month-row:last-child { border-bottom:none; font-weight:600; }
+  /* Préstamos */
+  .loan-card { background: linear-gradient(135deg, #1a1035 0%, #2d1b69 100%); border-radius: var(--radius); padding: 18px; color: #fff; margin-bottom: 12px; position: relative; overflow: hidden; }
+  .loan-card::before { content:''; position:absolute; top:-30px; right:-30px; width:120px; height:120px; border-radius:50%; background:rgba(255,255,255,.05); }
+  /* Balance histórico */
+  .period-card { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 10px; cursor:pointer; transition: border-color .15s; }
+  .period-card:hover { border-color: var(--green); }
+  .period-card.open { border-color: var(--green); }
+  .period-detail { display:none; margin-top:12px; padding-top:12px; border-top:0.5px solid var(--border); }
+  .period-card.open .period-detail { display:block; }
   /* Modal */
   .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 200; align-items: flex-end; }
   .overlay.open { display: flex; }
@@ -290,10 +299,30 @@
       </div>
     </div>
 
+    <!-- PRÉSTAMOS -->
+    <div class="screen" id="s-loans">
+      <p style="font-size:17px;font-weight:600;margin-bottom:4px">Préstamos</p>
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Seguimiento de cuotas y vencimientos</p>
+      <div id="loans-list"></div>
+      <button class="btn primary" onclick="openLoanModal()"><i class="ti ti-plus"></i> Nuevo préstamo</button>
+    </div>
+
+    <!-- BALANCE HISTÓRICO -->
+    <div class="screen" id="s-balance">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <div>
+          <p style="font-size:17px;font-weight:600">Balance histórico</p>
+          <p style="font-size:13px;color:var(--text-muted);margin-top:2px">Resumen por período</p>
+        </div>
+        <select id="bal-year" onchange="renderBalance()" style="font-size:13px;padding:7px 10px;border:0.5px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text)"></select>
+      </div>
+      <div id="balance-list"></div>
+    </div>
+
     <!-- CONFIGURACIÓN -->
     <div class="screen" id="s-settings">
       <p style="font-size:17px;font-weight:600;margin-bottom:4px">Configuración</p>
-      <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Colores y categorías personalizadas</p>
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Colores, categorías y datos</p>
 
       <!-- Colores por tipo -->
       <div class="card">
@@ -329,6 +358,18 @@
         <div class="card-title">Mis categorías personalizadas</div>
         <div id="custom-cat-list"></div>
       </div>
+
+      <!-- Zona de peligro -->
+      <div class="card" style="border-color:var(--red)">
+        <div class="card-title" style="color:var(--red)">⚠️ Zona de peligro</div>
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px">Estas acciones no se pueden deshacer.</p>
+        <button class="btn danger-btn" style="margin-bottom:8px" onclick="resetAllData()">
+          <i class="ti ti-trash"></i> Borrar todos los datos
+        </button>
+        <button class="btn" style="color:var(--amber);border-color:var(--amber-bg);background:var(--amber-bg)" onclick="resetOnlyTxs()">
+          <i class="ti ti-eraser"></i> Borrar solo movimientos
+        </button>
+      </div>
     </div>
   </div>
 
@@ -336,8 +377,8 @@
     <button class="active" id="nav-dashboard" onclick="goto('dashboard')"><i class="ti ti-layout-dashboard"></i>Inicio</button>
     <button id="nav-add" onclick="goto('add')"><i class="ti ti-plus"></i>Agregar</button>
     <button id="nav-cards" onclick="goto('cards')"><i class="ti ti-credit-card"></i>Tarjetas</button>
-    <button id="nav-budget" onclick="goto('budget')"><i class="ti ti-target"></i>Metas</button>
-    <button id="nav-analysis" onclick="goto('analysis')"><i class="ti ti-chart-pie"></i>Análisis</button>
+    <button id="nav-loans" onclick="goto('loans')"><i class="ti ti-building-bank"></i>Préstamos</button>
+    <button id="nav-balance" onclick="goto('balance')"><i class="ti ti-calendar-stats"></i>Balance</button>
     <button id="nav-settings" onclick="goto('settings')"><i class="ti ti-settings"></i>Config</button>
   </nav>
 </div>
@@ -380,6 +421,30 @@
 
 <!-- Modal Datos -->
 <div class="overlay" id="drive-overlay" onclick="if(event.target===this)closeDrive()">
+
+<!-- Modal Nuevo/Editar Préstamo -->
+<div class="overlay" id="loan-modal" onclick="if(event.target===this)closeLoanModal()">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="loan-modal-title">Nuevo préstamo</div>
+    <input type="hidden" id="lm-id">
+    <div class="form-group"><label>Nombre del préstamo</label><input id="lm-name" type="text" placeholder="Ej: Préstamo Galicia, Cuota auto..."></div>
+    <div class="form-row">
+      <div class="form-group"><label>Monto total ($)</label><input id="lm-total" type="number" inputmode="decimal" placeholder="0"></div>
+      <div class="form-group"><label>Saldo restante ($)</label><input id="lm-saldo" type="number" inputmode="decimal" placeholder="0"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Cuota mensual ($)</label><input id="lm-cuota" type="number" inputmode="decimal" placeholder="0"></div>
+      <div class="form-group"><label>Día de pago</label><input id="lm-dia" type="number" inputmode="numeric" min="1" max="31" placeholder="Ej: 10"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Cuotas restantes</label><input id="lm-cuotas" type="number" inputmode="numeric" min="1" placeholder="Ej: 24"></div>
+      <div class="form-group"><label>Tasa mensual (%)</label><input id="lm-tasa" type="number" inputmode="decimal" placeholder="0" step="0.1"></div>
+    </div>
+    <button class="btn primary" style="margin-bottom:8px" onclick="saveLoan()"><i class="ti ti-check"></i> Guardar préstamo</button>
+    <button class="btn" onclick="closeLoanModal()">Cancelar</button>
+  </div>
+</div>
   <div class="modal">
     <div class="modal-handle"></div>
     <div class="modal-title"><i class="ti ti-database" style="color:var(--green)"></i> Exportar e Importar datos</div>
@@ -417,6 +482,7 @@ const PAL = ['#1D9E75','#185FA5','#534AB7','#BA7517','#E24B4A','#0F6E56','#0C447
 let txs = JSON.parse(localStorage.getItem('mf_txs') || '[]');
 let budgets = JSON.parse(localStorage.getItem('mf_budgets') || '{}');
 let cards = JSON.parse(localStorage.getItem('mf_cards') || '[]');
+let loans = JSON.parse(localStorage.getItem('mf_loans') || '[]');
 let currentType = 'expense';
 let histFilter = 'all';
 let pieInst = null, barInst = null;
@@ -425,6 +491,7 @@ function persist() {
   localStorage.setItem('mf_txs', JSON.stringify(txs));
   localStorage.setItem('mf_budgets', JSON.stringify(budgets));
   localStorage.setItem('mf_cards', JSON.stringify(cards));
+  localStorage.setItem('mf_loans', JSON.stringify(loans));
   localStorage.setItem('mf_custom_cats', JSON.stringify(customCats));
   localStorage.setItem('mf_colors', JSON.stringify(userColors));
 }
@@ -458,24 +525,36 @@ function goto(id) {
   document.getElementById('nav-' + id).classList.add('active');
   if (id === 'dashboard') renderDashboard();
   if (id === 'cards') renderCards();
+  if (id === 'loans') renderLoans();
+  if (id === 'balance') renderBalance();
   if (id === 'budget') renderBudget();
   if (id === 'analysis') renderAnalysis();
   if (id === 'settings') renderSettings();
 }
 
-// Badge de alerta en tarjetas si hay vencimiento próximo
-function updateCardsBadge() {
+// Badge de alerta en tarjetas y préstamos si hay vencimiento próximo
+function updateAlertBadges() {
   const today = new Date().getDate();
-  const hasDue = cards.some(c => {
-    const d = c.venc;
-    if (!d) return false;
-    const daysUntil = d >= today ? d - today : (31 - today) + d;
-    return daysUntil <= 5 && c.saldo > 0;
+
+  // Tarjetas
+  const cardDue = cards.some(c => {
+    if (!c.venc || c.saldo <= 0) return false;
+    const d = c.venc >= today ? c.venc - today : (31 - today) + c.venc;
+    return d <= 5;
   });
-  const btn = document.getElementById('nav-cards');
-  if (hasDue) btn.classList.add('nav-badge');
-  else btn.classList.remove('nav-badge');
+  document.getElementById('nav-cards').classList.toggle('nav-badge', cardDue);
+
+  // Préstamos
+  const loanDue = loans.some(l => {
+    if (!l.dia || l.saldo <= 0) return false;
+    const d = l.dia >= today ? l.dia - today : (31 - today) + l.dia;
+    return d <= 5;
+  });
+  document.getElementById('nav-loans').classList.toggle('nav-badge', loanDue);
 }
+
+// alias para compatibilidad con código anterior
+function updateCardsBadge() { updateAlertBadges(); }
 
 // ─── TOPBAR ──────────────────────────────────────────────────────────────────
 function updateTopbar() {
@@ -523,11 +602,20 @@ function renderDashboard() {
     else if (daysUntil <= 7) alerts.unshift({ t: 'warning', i: 'ti-credit-card', msg: `<b>${c.name}</b> vence el día <b>${c.venc}</b> (en ${daysUntil} días). Saldo: ${fmt(c.saldo)}` });
   });
 
+  // Alertas de vencimiento de préstamos
+  loans.forEach(l => {
+    if (!l.dia || l.saldo <= 0) return;
+    const daysUntil = l.dia >= today ? l.dia - today : (31 - today) + l.dia;
+    if (daysUntil === 0) alerts.unshift({ t: 'danger', i: 'ti-building-bank', msg: `<b>¡Hoy vence cuota de ${l.name}!</b> Monto: ${fmt(l.cuota)}` });
+    else if (daysUntil <= 3) alerts.unshift({ t: 'danger', i: 'ti-building-bank', msg: `<b>${l.name}</b>: cuota vence en <b>${daysUntil} días</b> (día ${l.dia}). ${fmt(l.cuota)}` });
+    else if (daysUntil <= 7) alerts.unshift({ t: 'warning', i: 'ti-building-bank', msg: `<b>${l.name}</b>: cuota el día <b>${l.dia}</b> (en ${daysUntil} días). ${fmt(l.cuota)}` });
+  });
+
   document.getElementById('d-alerts').innerHTML = alerts.map(a =>
     `<div class="alert ${a.t}"><i class="ti ${a.i}"></i><div class="alert-body">${a.msg}</div></div>`
   ).join('');
 
-  updateCardsBadge();
+  updateAlertBadges();
 
   // Pie
   const catMap = {};
@@ -1093,6 +1181,220 @@ function calcSim() {
     </div>`;
 }
 
+// ─── PRÉSTAMOS ────────────────────────────────────────────────────────────────
+function renderLoans() {
+  const el = document.getElementById('loans-list');
+  if (!loans.length) {
+    el.innerHTML = '<div class="empty" style="padding:30px 20px"><i class="ti ti-building-bank"></i><p>No tenés préstamos cargados</p></div>';
+    return;
+  }
+  el.innerHTML = loans.map(l => loanHTML(l)).join('');
+}
+
+function loanHTML(l) {
+  const today = new Date().getDate();
+  const daysUntil = l.dia ? (l.dia >= today ? l.dia - today : (31 - today) + l.dia) : null;
+  const urgent = daysUntil !== null && daysUntil <= 5 && l.saldo > 0;
+  const pct = l.total > 0 ? Math.min(((l.total - l.saldo) / l.total) * 100, 100) : 0;
+  const mesesRest = l.cuota > 0 && l.saldo > 0 ? Math.ceil(l.saldo / l.cuota) : l.cuotas;
+
+  return `<div class="loan-card" style="${urgent ? 'box-shadow:0 0 0 2px var(--red),0 4px 20px rgba(226,75,74,.3)' : ''}">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;position:relative;z-index:1">
+      <div>
+        <div class="cc-name">${l.name} ${urgent ? '🔴' : ''}</div>
+        <div class="cc-meta">
+          ${l.dia ? `Día de pago: ${l.dia}${daysUntil !== null ? ` (en ${daysUntil}d)` : ''}` : ''}
+          ${l.tasa ? ` · TNA aprox. ${(l.tasa * 12).toFixed(1)}%` : ''}
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;position:relative;z-index:1">
+        <button class="cc-btn" style="padding:6px 10px" onclick="openLoanModal('${l.id}')"><i class="ti ti-edit" style="font-size:15px"></i></button>
+        <button class="cc-btn" style="padding:6px 10px;border-color:rgba(226,75,74,.5);color:#ff8080" onclick="deleteLoan('${l.id}')"><i class="ti ti-trash" style="font-size:15px"></i></button>
+      </div>
+    </div>
+    <div class="cc-saldo">${fmt(l.saldo)}</div>
+    <div class="cc-meta" style="margin-bottom:8px">
+      Saldo restante · Cuota: <b style="color:#fff">${fmt(l.cuota)}/mes</b>
+      ${mesesRest ? ` · ~${mesesRest} cuotas restantes` : ''}
+    </div>
+    ${l.total > 0 ? `
+      <div style="height:4px;background:rgba(255,255,255,.2);border-radius:2px;margin-bottom:12px;position:relative;z-index:1">
+        <div style="height:100%;width:${pct}%;background:#6bcb77;border-radius:2px"></div>
+      </div>
+      <div class="cc-meta" style="margin-bottom:4px">Pagado: ${pct.toFixed(0)}% de ${fmt(l.total)}</div>` : '<div style="margin-bottom:12px"></div>'}
+    <div class="cc-actions">
+      <button class="cc-btn" onclick="payLoanInstallment('${l.id}')"><i class="ti ti-check"></i> Registrar cuota pagada</button>
+    </div>
+  </div>`;
+}
+
+function openLoanModal(id) {
+  const l = id ? loans.find(x => x.id === id) : null;
+  document.getElementById('loan-modal-title').textContent = l ? 'Editar préstamo' : 'Nuevo préstamo';
+  document.getElementById('lm-id').value = l ? l.id : '';
+  document.getElementById('lm-name').value = l ? l.name : '';
+  document.getElementById('lm-total').value = l ? (l.total || '') : '';
+  document.getElementById('lm-saldo').value = l ? l.saldo : '';
+  document.getElementById('lm-cuota').value = l ? l.cuota : '';
+  document.getElementById('lm-dia').value = l ? (l.dia || '') : '';
+  document.getElementById('lm-cuotas').value = l ? (l.cuotas || '') : '';
+  document.getElementById('lm-tasa').value = l ? (l.tasa || '') : '';
+  document.getElementById('loan-modal').classList.add('open');
+}
+
+function closeLoanModal() { document.getElementById('loan-modal').classList.remove('open'); }
+
+function saveLoan() {
+  const id = document.getElementById('lm-id').value;
+  const name = document.getElementById('lm-name').value.trim();
+  const cuota = parseFloat(document.getElementById('lm-cuota').value);
+  if (!name || !cuota) { toast('⚠️ Ingresá nombre y cuota mensual'); return; }
+  const data = {
+    id: id || String(Date.now()),
+    name,
+    total: parseFloat(document.getElementById('lm-total').value) || 0,
+    saldo: parseFloat(document.getElementById('lm-saldo').value) || 0,
+    cuota,
+    dia: parseInt(document.getElementById('lm-dia').value) || null,
+    cuotas: parseInt(document.getElementById('lm-cuotas').value) || null,
+    tasa: parseFloat(document.getElementById('lm-tasa').value) || 0
+  };
+  if (id) loans = loans.map(l => l.id === id ? data : l);
+  else loans.push(data);
+  persist();
+  closeLoanModal();
+  renderLoans();
+  updateAlertBadges();
+  toast(id ? '✓ Préstamo actualizado' : '✓ Préstamo guardado');
+}
+
+function deleteLoan(id) {
+  const l = loans.find(x => x.id === id);
+  if (!confirm(`¿Eliminar "${l?.name}"?`)) return;
+  loans = loans.filter(x => x.id !== id);
+  persist();
+  renderLoans();
+  updateAlertBadges();
+  toast('✓ Préstamo eliminado');
+}
+
+function payLoanInstallment(id) {
+  const l = loans.find(x => x.id === id);
+  if (!l) return;
+  if (!confirm(`¿Registrar pago de cuota ${fmt(l.cuota)} para "${l.name}"?`)) return;
+  loans = loans.map(x => x.id === id
+    ? { ...x, saldo: Math.max(0, x.saldo - x.cuota), cuotas: x.cuotas ? Math.max(0, x.cuotas - 1) : x.cuotas }
+    : x);
+  persist();
+  renderLoans();
+  updateAlertBadges();
+  toast(`✓ Cuota de ${fmt(l.cuota)} registrada`);
+}
+
+// ─── BALANCE HISTÓRICO ────────────────────────────────────────────────────────
+function renderBalance() {
+  const yearSel = document.getElementById('bal-year');
+  const allMonths = [...new Set(txs.map(t => t.date.slice(0, 7)))].sort().reverse();
+  const allYears = [...new Set(allMonths.map(m => m.slice(0, 4)))];
+  if (!allYears.length) allYears.push(new Date().getFullYear().toString());
+
+  const curYear = yearSel.value || allYears[0];
+  yearSel.innerHTML = allYears.map(y => `<option value="${y}" ${y === curYear ? 'selected' : ''}>${y}</option>`).join('');
+
+  const months = allMonths.filter(m => m.startsWith(curYear));
+  if (!months.length) {
+    document.getElementById('balance-list').innerHTML = '<div class="empty"><i class="ti ti-calendar-stats"></i><p>Sin movimientos en este año</p></div>';
+    return;
+  }
+
+  let yearIncome = 0, yearExpense = 0, yearBalance = 0;
+  const rows = months.map(m => {
+    const { income, expense, debt, savings, txs: mts } = monthStats(m);
+    const bal = income - expense - debt;
+    yearIncome += income; yearExpense += expense; yearBalance += bal;
+    const [, mo] = m.split('-');
+    const label = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][+mo - 1];
+    const catMap = {};
+    mts.filter(t => t.type === 'expense').forEach(t => { catMap[t.cat] = (catMap[t.cat] || 0) + t.amount; });
+    const topCats = Object.entries(catMap).sort((a,b) => b[1]-a[1]).slice(0, 3);
+    return { m, label, income, expense, debt, savings, bal, topCats };
+  });
+
+  // Resumen anual
+  const summaryHTML = `
+    <div class="card" style="background:var(--green);color:#fff;border-color:var(--green)">
+      <div style="font-size:13px;opacity:.8;margin-bottom:4px">Resumen ${curYear}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+        <div><div style="font-size:11px;opacity:.7">Ingresos</div><div style="font-size:16px;font-weight:700">${fmt(yearIncome)}</div></div>
+        <div><div style="font-size:11px;opacity:.7">Gastos</div><div style="font-size:16px;font-weight:700">${fmt(yearExpense)}</div></div>
+        <div><div style="font-size:11px;opacity:.7">Balance</div><div style="font-size:16px;font-weight:700;color:${yearBalance >= 0 ? '#fff' : '#ffaaaa'}">${fmt(yearBalance)}</div></div>
+      </div>
+    </div>`;
+
+  const periodsHTML = rows.map(r => `
+    <div class="period-card" id="pc-${r.m}" onclick="togglePeriod('${r.m}')">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-size:15px;font-weight:600">${r.label} ${r.m.slice(0,4)}</div>
+          <div style="font-size:12px;color:var(--text-muted);margin-top:2px">${r.topCats.map(([c]) => c).join(' · ') || 'Sin gastos'}</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:16px;font-weight:700;color:${r.bal >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(r.bal)}</div>
+          <div style="font-size:11px;color:var(--text-muted)">balance</div>
+        </div>
+      </div>
+      <div class="period-detail">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+          <div class="metric" style="padding:10px"><div class="metric-label">Ingresos</div><div class="metric-value green" style="font-size:16px">${fmt(r.income)}</div></div>
+          <div class="metric" style="padding:10px"><div class="metric-label">Gastos</div><div class="metric-value red" style="font-size:16px">${fmt(r.expense)}</div></div>
+          <div class="metric" style="padding:10px"><div class="metric-label">Deudas</div><div class="metric-value amber" style="font-size:16px">${fmt(r.debt)}</div></div>
+          <div class="metric" style="padding:10px"><div class="metric-label">Ahorros</div><div class="metric-value blue" style="font-size:16px">${fmt(r.savings)}</div></div>
+        </div>
+        ${r.topCats.length ? `
+          <p style="font-size:12px;color:var(--text-muted);margin-bottom:8px">Top gastos</p>
+          ${r.topCats.map(([cat, amt]) => `
+            <div style="display:flex;justify-content:space-between;font-size:13px;padding:5px 0;border-bottom:0.5px solid var(--border)">
+              <span>${cat}</span><span style="font-weight:600;color:var(--red)">${fmt(amt)}</span>
+            </div>`).join('')}` : ''}
+        <button class="btn" style="margin-top:12px;font-size:13px" onclick="event.stopPropagation();filterHistoryByMonth('${r.m}')">
+          <i class="ti ti-list"></i> Ver todos los movimientos
+        </button>
+      </div>
+    </div>`).join('');
+
+  document.getElementById('balance-list').innerHTML = summaryHTML + periodsHTML;
+}
+
+function togglePeriod(m) {
+  const el = document.getElementById('pc-' + m);
+  el.classList.toggle('open');
+}
+
+function filterHistoryByMonth(m) {
+  // Navegar a historial con ese mes seleccionado
+  goto('dashboard'); // primero dashboard para evitar estado roto
+  // Abrir historial con el mes correcto — implementado vía historial en pantalla de análisis
+  // Por simplicidad, mostramos un toast con instrucción
+  toast(`Filtrá por ${m.slice(5,7)}/${m.slice(0,4)} en la pantalla Historial`);
+}
+
+// ─── BORRAR DATOS ─────────────────────────────────────────────────────────────
+function resetAllData() {
+  if (!confirm('⚠️ Esto borrará TODOS los datos: movimientos, tarjetas, préstamos, presupuestos y configuración.\n\n¿Estás seguro?')) return;
+  if (!confirm('Última confirmación: ¿borrar TODO?')) return;
+  localStorage.clear();
+  location.reload();
+}
+
+function resetOnlyTxs() {
+  if (!confirm('¿Borrar solo los movimientos registrados? Se conservan tarjetas, préstamos y presupuestos.')) return;
+  txs = [];
+  persist();
+  renderDashboard();
+  toast('✓ Movimientos eliminados');
+  goto('dashboard');
+}
+
 // ─── SETTINGS — COLORES Y CATEGORÍAS ─────────────────────────────────────────
 function renderSettings() {
   // Color pickers
@@ -1195,7 +1497,6 @@ if (txs.length === 0) {
     {id:7,type:'savings',desc:'Fondo emergencia',amount:30000,date:m+'-01',cat:'Fondo emergencia',note:''},
   ];
   budgets = { Comida: 50000, Entretenimiento: 10000, Ropa: 20000, Salud: 40000 };
-  // Demo tarjeta
   if (!cards.length) {
     cards = [{
       id: 'demo1', name: 'Visa Santander', saldo: 180000, limite: 500000,
@@ -1203,10 +1504,16 @@ if (txs.length === 0) {
       payments: [{ amount: 50000, date: curMonth() + '-01', note: 'Pago parcial' }]
     }];
   }
+  if (!loans.length) {
+    loans = [{
+      id: 'loan1', name: 'Préstamo Galicia', total: 1200000, saldo: 900000,
+      cuota: 75000, dia: 10, cuotas: 12, tasa: 4.5
+    }];
+  }
   persist();
 }
 renderDashboard();
-updateCardsBadge();
+updateAlertBadges();
 
 // Service Worker
 if ('serviceWorker' in navigator) {
