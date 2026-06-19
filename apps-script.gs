@@ -1,27 +1,42 @@
 /**
  * ╔══════════════════════════════════════════════════════════════╗
  * ║          MIS FINANZAS — Google Apps Script                  ║
- * ║  Pegá este código en tu Google Sheet:                       ║
- * ║  Extensiones → Apps Script → reemplazá todo → Guardar      ║
  * ╚══════════════════════════════════════════════════════════════╝
  *
- * PASOS PARA ACTIVAR:
- * 1. Cambiá TU_CLAVE_SECRETA por una contraseña tuya
- * 2. Guardar (Ctrl+S)
- * 3. Implementar → Nueva implementación
+ * PASOS PARA ACTIVAR (proyecto independiente, vinculado por ID):
+ * 1. Entrá a tu Google Sheet → copiá el ID de la URL:
+ *    docs.google.com/spreadsheets/d/ESTE-ES-EL-ID/edit
+ * 2. Pegá ese ID abajo en SHEET_ID (reemplazando el que ya está)
+ * 3. Cambiá TU_CLAVE_SECRETA por una contraseña tuya
+ * 4. Guardar (Ctrl+S)
+ * 5. Implementar → Nueva implementación
  *    - Tipo: Aplicación web
  *    - Ejecutar como: Yo
  *    - Acceso: Cualquier persona
- * 4. Copiá la URL que te da Google
- * 5. Pegá esa URL y tu clave en la app (botón "Datos" → Configurar)
- * 6. Para activar las alertas por email automáticas:
+ * 6. Te va a pedir autorizar permisos — es normal, es tu propio script
+ * 7. Copiá la URL que te da Google (termina en /exec)
+ * 8. Pegá esa URL y tu clave en la app (botón "Datos" → Configurar)
+ * 9. Para activar las alertas por email automáticas:
  *    En el editor de Apps Script → ícono de reloj (Activadores) →
  *    + Agregar activador → función: enviarAlertasDiarias
  *    → Tipo de evento: Basado en tiempo → Todos los días → elegí un horario
  *    → Guardar (te va a pedir autorización la primera vez)
+ *
+ * NOTA: Si "Extensiones → Apps Script" dentro del Sheet te da error de Drive,
+ * usá este enfoque alternativo: entrá directo a script.google.com →
+ * "Proyecto nuevo" → pegá este código → funciona igual, porque el script
+ * apunta al Sheet por ID en vez de depender de la vinculación automática.
  */
 
 const SECRET = 'TU_CLAVE_SECRETA';  // ← cambiá esto
+
+// ID de tu Google Sheet — se ve en la URL: docs.google.com/spreadsheets/d/ESTE_ID/edit
+const SHEET_ID = '1IgdPCxx69J2J-OOsZa7xXqH47NAnq6IWcB04RXNIDgY';
+
+// Devuelve el Sheet correcto sin depender de que el script esté "vinculado"
+function _getSheet() {
+  return SpreadsheetApp.openById(SHEET_ID);
+}
 
 // ── Maneja requests GET (ping de estado, o lectura completa de datos) ──────
 function doGet(e) {
@@ -32,7 +47,7 @@ function doGet(e) {
       if (params.secret !== SECRET) {
         return _resp({ status: 'error', message: 'Clave incorrecta' });
       }
-      const ss = SpreadsheetApp.getActiveSpreadsheet();
+      const ss = _getSheet();
       const data = {
         transactions: _hojaATransacciones(ss),
         budgets: _hojaAPresupuestos(ss),
@@ -120,7 +135,7 @@ function doPost(e) {
       return _resp({ status: 'error', message: 'Clave incorrecta' });
     }
 
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = _getSheet();
 
     const sheetDefs = data.sheets || {};
     Object.entries(sheetDefs).forEach(([name, rows]) => {
@@ -193,7 +208,7 @@ function _formatSheets(ss) {
 //  (configurar el disparador como se explica arriba)
 // ═══════════════════════════════════════════════════════════════════════════
 function enviarAlertasDiarias() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = _getSheet();
   const cfg = _leerConfig(ss);
 
   if (!cfg.email) return; // sin email configurado, no hace nada
