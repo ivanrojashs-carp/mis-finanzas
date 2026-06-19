@@ -1,217 +1,121 @@
 /**
- * google-auth.js — Autenticación Google OAuth2 + Sync con Google Sheets
+ * google-auth.js — Sync via Google Apps Script (sin OAuth, sin Google Cloud)
  *
- * CONFIGURACIÓN REQUERIDA:
- * 1. Ir a https://console.cloud.google.com
- * 2. Crear proyecto → Habilitar Google Sheets API + Google Drive API
- * 3. Crear credencial OAuth 2.0 (tipo: Aplicación web)
- * 4. Agregar tu dominio de GitHub Pages en "Orígenes permitidos"
- * 5. Pegar tu CLIENT_ID abajo
+ * ═══════════════════════════════════════════════════════════════
+ * SETUP (una sola vez, ~10 minutos):
+ *
+ * 1. Abrí tu Google Drive → Nuevo → Google Sheets
+ *    Poné el nombre: "Mis Finanzas Personales"
+ *
+ * 2. En el Sheet: Extensiones → Apps Script
+ *
+ * 3. Borrá todo el código que aparece y pegá el contenido
+ *    del archivo "apps-script.gs" que viene en este ZIP
+ *
+ * 4. En el script, cambiá esta línea:
+ *      const SECRET = 'TU_CLAVE_SECRETA';
+ *    Por una contraseña tuya, ej: 'MisFinanzas2024!'
+ *
+ * 5. Guardar (Ctrl+S) → Implementar → Nueva implementación
+ *    - Tipo: Aplicación web
+ *    - Ejecutar como: Yo (tu cuenta)
+ *    - Quién tiene acceso: Cualquier persona
+ *    → Implementar → Autorizar → Copiar la URL
+ *
+ * 6. Pegá la URL y tu clave abajo:
+ * ═══════════════════════════════════════════════════════════════
  */
 
-const GOOGLE_CLIENT_ID = 'TU_CLIENT_ID_AQUI.apps.googleusercontent.com';
-const SHEETS_SCOPE = 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file';
-const STORAGE_KEY = 'mf_google_token';
-const SHEET_ID_KEY = 'mf_sheet_id';
+const GAS_CONFIG_KEY = 'mf_gas_config';
 
-window.gAuth = (function () {
-  let _token = null;
-  let _email = '';
+window.gAuth = (() => {
+  let _cfg = null;
 
-  // Cargar token guardado
-  function _loadToken() {
-    try {
-      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
-      if (saved && saved.expires_at > Date.now()) {
-        _token = saved.access_token;
-        _email = saved.email || '';
-        return true;
-      }
-    } catch (e) {}
-    return false;
+  function _load() {
+    try { _cfg = JSON.parse(localStorage.getItem(GAS_CONFIG_KEY) || 'null'); } catch(e) {}
   }
-  _loadToken();
+  _load();
 
-  function isSignedIn() { return !!_token; }
-  function getEmail() { return _email; }
+  function isSignedIn()  { return !!(_cfg && _cfg.url && _cfg.secret); }
+  function getEmail()    { return _cfg ? (_cfg.label || 'Apps Script configurado') : ''; }
+  function signIn()      { window.openGasSetup && window.openGasSetup(); }
+  function signOut()     { localStorage.removeItem(GAS_CONFIG_KEY); _cfg = null; window.updateSyncBtn && window.updateSyncBtn(); }
 
-  // OAuth2 implicit flow (popup)
-  function signIn() {
-    if (GOOGLE_CLIENT_ID === 'TU_CLIENT_ID_AQUI.apps.googleusercontent.com') {
-      alert('⚠️ Configurá tu CLIENT_ID en google-auth.js para activar la sincronización con Google Drive.\n\nSeguí las instrucciones en el archivo README.md');
-      return;
-    }
-    const redirect = location.origin + location.pathname;
-    const params = new URLSearchParams({
-      client_id: GOOGLE_CLIENT_ID,
-      redirect_uri: redirect,
-      response_type: 'token',
-      scope: SHEETS_SCOPE,
-      include_granted_scopes: 'true',
-      state: 'google_oauth'
-    });
-    const popup = window.open(
-      'https://accounts.google.com/o/oauth2/v2/auth?' + params,
-      'google-login',
-      'width=500,height=600,left=100,top=100'
-    );
+  async function syncToSheets(txs, budgets, cards = [], loans = [], alertConfig = {}) {
+    if (!isSignedIn()) throw new Error('Configurá la URL del Apps Script primero');
 
-    // Escuchar el callback del popup
-    window.addEventListener('message', function onMsg(e) {
-      if (e.data && e.data.type === 'GOOGLE_TOKEN') {
-        window.removeEventListener('message', onMsg);
-        _token = e.data.token;
-        _email = e.data.email || '';
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({
-          access_token: _token,
-          email: _email,
-          expires_at: Date.now() + (e.data.expires_in || 3600) * 1000
-        }));
-        popup && popup.close();
-        // Refrescar la UI del modal
-        window.handleSync && window.handleSync();
-      }
-    });
+    const MLABELS = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 
-    // Manejar hash en la misma ventana (algunos browsers)
-    if (location.hash.includes('access_token')) {
-      _handleHash();
-    }
-  }
+    // Armar todas las hojas como arrays de arrays
+    const txRows = [['Fecha','Tipo','Descripción','Categoría','Monto ($)','Nota'],
+      ...[...txs].sort((a,b)=>b.date.localeCompare(a.date))
+        .map(t=>[t.date, t.type, t.desc, t.cat, t.amount, t.note||''])];
 
-  function _handleHash() {
-    const params = new URLSearchParams(location.hash.slice(1));
-    if (params.get('access_token')) {
-      _token = params.get('access_token');
-      const expires_in = parseInt(params.get('expires_in') || '3600');
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        access_token: _token,
-        expires_at: Date.now() + expires_in * 1000
-      }));
-      history.replaceState(null, '', location.pathname);
-      fetchEmail();
-    }
-  }
+    const bRows  = [['Categoría','Límite mensual ($)'],
+      ...Object.entries(budgets).map(([c,v])=>[c,v])];
 
-  async function fetchEmail() {
-    if (!_token) return;
-    try {
-      const r = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-        headers: { Authorization: 'Bearer ' + _token }
-      });
-      const d = await r.json();
-      _email = d.email || '';
-      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-      saved.email = _email;
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
-    } catch (e) {}
-  }
+    const months = [...new Set(txs.map(t=>t.date.slice(0,7)))].sort();
+    const sumRows = [['Período','Ingresos','Gastos','Deudas','Ahorros','Inversiones','Balance neto'],
+      ...months.map(m => {
+        const ts  = txs.filter(t=>t.date.startsWith(m));
+        const inc = ts.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0);
+        const exp = ts.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0);
+        const dbt = ts.filter(t=>t.type==='debt').reduce((s,t)=>s+t.amount,0);
+        const sav = ts.filter(t=>t.type==='savings').reduce((s,t)=>s+t.amount,0);
+        const inv = ts.filter(t=>t.type==='investment').reduce((s,t)=>s+t.amount,0);
+        const [y,mo] = m.split('-');
+        return [MLABELS[+mo-1]+' '+y, inc, exp, dbt, sav, inv, inc-exp-dbt];
+      })];
 
-  function signOut() {
-    _token = null;
-    _email = '';
-    localStorage.removeItem(STORAGE_KEY);
-    const syncBtn = document.getElementById('sync-btn');
-    if (syncBtn) syncBtn.classList.remove('synced');
-  }
+    const cRows  = [['Nombre','Saldo ($)','Límite ($)','Día cierre','Día vencimiento','Pago mín %'],
+      ...cards.map(c=>[c.name, c.saldo, c.limite||'', c.cierre||'', c.venc||'', c.minpct||''])];
 
-  // ─── GOOGLE SHEETS API ──────────────────────────────────────────────────────
-  async function _api(url, method = 'GET', body = null) {
-    const opts = {
-      method,
-      headers: {
-        'Authorization': 'Bearer ' + _token,
-        'Content-Type': 'application/json'
+    const lRows  = [['Nombre','Total ($)','Saldo ($)','Cuota ($)','Día pago','Cuotas rest.','Tasa %'],
+      ...loans.map(l=>[l.name, l.total||'', l.saldo, l.cuota, l.dia||'', l.cuotas||'', l.tasa||''])];
+
+    const cfgRows = [['Clave','Valor'],
+      ['email', alertConfig.email || ''],
+      ['avisar_tarjetas', alertConfig.cards ? 'SI' : 'NO'],
+      ['avisar_prestamos', alertConfig.loans ? 'SI' : 'NO'],
+      ['avisar_presupuesto', alertConfig.budget ? 'SI' : 'NO'],
+      ['avisar_deficit', alertConfig.deficit ? 'SI' : 'NO'],
+      ['dias_anticipacion', alertConfig.days || 5]];
+
+    const payload = {
+      secret: _cfg.secret,
+      sheets: {
+        Transacciones:   txRows,
+        Presupuestos:    bRows,
+        'Resumen mensual': sumRows,
+        Tarjetas:        cRows,
+        Préstamos:       lRows,
+        Config:          cfgRows
       }
     };
-    if (body) opts.body = JSON.stringify(body);
-    const r = await fetch(url, opts);
-    if (!r.ok) {
-      const err = await r.json().catch(() => ({}));
-      throw new Error(err.error?.message || 'Error API Google');
-    }
-    return r.json();
-  }
 
-  async function _getOrCreateSheet() {
-    let sheetId = localStorage.getItem(SHEET_ID_KEY);
-    if (sheetId) {
-      // Verificar que existe
-      try {
-        await _api(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}?fields=spreadsheetId`);
-        return sheetId;
-      } catch (e) {
-        sheetId = null;
-        localStorage.removeItem(SHEET_ID_KEY);
-      }
-    }
-
-    // Crear hoja nueva
-    const res = await _api('https://sheets.googleapis.com/v4/spreadsheets', 'POST', {
-      properties: { title: 'Mis Finanzas Personales', locale: 'es_AR' },
-      sheets: [
-        { properties: { title: 'Transacciones', sheetId: 0 } },
-        { properties: { title: 'Presupuestos', sheetId: 1 } },
-        { properties: { title: 'Resumen', sheetId: 2 } }
-      ]
-    });
-    sheetId = res.spreadsheetId;
-    localStorage.setItem(SHEET_ID_KEY, sheetId);
-    return sheetId;
-  }
-
-  async function syncToSheets(txs, budgets) {
-    if (!_token) throw new Error('No autenticado');
-
-    const sheetId = await _getOrCreateSheet();
-
-    // Preparar filas de transacciones
-    const txRows = [
-      ['ID', 'Fecha', 'Tipo', 'Descripción', 'Categoría', 'Monto', 'Nota'],
-      ...txs.map(t => [t.id, t.date, t.type, t.desc, t.cat, t.amount, t.note || ''])
-    ];
-
-    // Preparar filas de presupuestos
-    const budgetRows = [
-      ['Categoría', 'Límite Mensual'],
-      ...Object.entries(budgets).map(([cat, lim]) => [cat, lim])
-    ];
-
-    // Calcular resumen por mes
-    const months = [...new Set(txs.map(t => t.date.slice(0, 7)))].sort();
-    const summaryRows = [
-      ['Mes', 'Ingresos', 'Gastos', 'Deudas', 'Ahorros', 'Balance'],
-      ...months.map(m => {
-        const ts = txs.filter(t => t.date.startsWith(m));
-        const inc = ts.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
-        const exp = ts.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
-        const dbt = ts.filter(t => t.type === 'debt').reduce((s, t) => s + t.amount, 0);
-        const sav = ts.filter(t => t.type === 'savings').reduce((s, t) => s + t.amount, 0);
-        return [m, inc, exp, dbt, sav, inc - exp - dbt];
-      })
-    ];
-
-    // Escribir todo en batch
-    await _api(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values:batchUpdate`, 'POST', {
-      valueInputOption: 'RAW',
-      data: [
-        { range: 'Transacciones!A1', values: txRows },
-        { range: 'Presupuestos!A1', values: budgetRows },
-        { range: 'Resumen!A1', values: summaryRows }
-      ]
+    const res = await fetch(_cfg.url, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+      // Sin Content-Type header — GAS requiere que sea omitido para evitar preflight CORS
     });
 
-    // Marcar botón como sincronizado
-    const syncBtn = document.getElementById('sync-btn');
-    if (syncBtn) { syncBtn.classList.add('synced'); document.getElementById('sync-label').textContent = '✓ Sync'; }
-
-    return `https://docs.google.com/spreadsheets/d/${sheetId}`;
+    const text = await res.text();
+    let json;
+    try { json = JSON.parse(text); } catch(e) { throw new Error('Respuesta inesperada del servidor: ' + text.slice(0,100)); }
+    if (json.status !== 'ok') throw new Error(json.message || 'Error en el script');
+    return json.url || '';
   }
 
-  // Manejar redirect OAuth si venimos de login
-  if (location.hash.includes('access_token')) {
-    setTimeout(_handleHash, 100);
+  async function importFromSheets() {
+    if (!isSignedIn()) throw new Error('Configurá la URL del Apps Script primero');
+    const url = _cfg.url + '?action=read&secret=' + encodeURIComponent(_cfg.secret);
+    const res = await fetch(url, { method: 'GET' });
+    const text = await res.text();
+    let json;
+    try { json = JSON.parse(text); } catch(e) { throw new Error('Respuesta inesperada: ' + text.slice(0,100)); }
+    if (json.status !== 'ok') throw new Error(json.message || 'Error al leer el Sheet');
+    return json.data; // { transactions, budgets, cards, loans }
   }
 
-  return { isSignedIn, getEmail, signIn, signOut, syncToSheets };
+  return { isSignedIn, getEmail, signIn, signOut, syncToSheets, importFromSheets };
 })();
