@@ -2,7 +2,8 @@
   "name": "Mis Finanzas Personales",
   "short_name": "MisFinanzas",
   "description": "Gestión de finanzas personales con sync a Google Drive",
-  "start_url": "/",
+  "start_url": "./index.html",
+  "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#ffffff",
@@ -29,7 +30,7 @@
       "name": "Agregar gasto",
       "short_name": "Gasto",
       "description": "Registrar un nuevo gasto",
-      "url": "/?screen=add",
+      "url": "./index.html?screen=add",
       "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
     }
   ]

@@ -1,8 +1,8 @@
-const CACHE = 'mis-finanzas-v8';
+const CACHE = 'mis-finanzas-v9';
 const ASSETS = [
-  '/',
-  '/index.html',
-  '/manifest.json',
+  './',
+  './index.html',
+  './manifest.json',
   'https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css',
   'https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js',
   'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'
@@ -48,7 +48,7 @@ self.addEventListener('fetch', e => {
       }).catch(() => {
         // Fallback offline para navegación
         if (e.request.mode === 'navigate') {
-          return caches.match('/index.html');
+          return caches.match('./index.html');
         }
       });
     })
