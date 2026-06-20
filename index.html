@@ -1696,6 +1696,24 @@ function recalcLoanTotals(loan) {
   return { ...loan, saldo, vencido: vencidoSinPagar };
 }
 
+// Migra préstamos del modelo viejo (sin installments) al nuevo formato con cronograma
+function migrateOldLoans() {
+  let migrated = false;
+  loans = loans.map(l => {
+    if (l.installments && l.installments.length) return l; // ya está en formato nuevo
+    migrated = true;
+    const numCuotas = l.cuotas || 12;
+    const montoCuota = l.cuota || (l.total ? l.total / numCuotas : 0);
+    const fechaBase = curMonth() + '-' + String(l.dia || 10).padStart(2, '0');
+    const installments = generateInstallments(l.total || (montoCuota * numCuotas), numCuotas, montoCuota, fechaBase, l.dia);
+    return recalcLoanTotals({ ...l, total: l.total || (montoCuota * numCuotas), installments });
+  });
+  if (migrated) {
+    persist();
+    toast('✓ Préstamos actualizados al nuevo formato con cuotas');
+  }
+}
+
 function renderLoans() {
   const el = document.getElementById('loans-list');
   if (!loans.length) {
@@ -1721,7 +1739,21 @@ function loanHTML(l) {
     urgent = daysUntil <= 5;
   }
 
-  const pct = l.total > 0 ? Math.min(((l.total - l.saldo) / l.total) * 100, 100) : 0;
+  // % pagado: solo tiene sentido si hay cuotas Y un total válido
+  const pct = (l.total > 0 && insts.length > 0) ? Math.min(((l.total - l.saldo) / l.total) * 100, 100) : 0;
+
+  if (!insts.length) {
+    return `<div class="loan-card">
+      <div class="cc-name">${l.name}</div>
+      <div class="alert warning" style="margin-top:10px;color:#1a1a1a">
+        <i class="ti ti-alert-triangle"></i>
+        <div class="alert-body" style="font-size:13px">Este préstamo no tiene cuotas generadas. Borralo y volvé a crearlo completando cantidad de cuotas, monto y fecha de inicio.</div>
+      </div>
+      <div class="cc-actions" style="margin-top:10px">
+        <button class="cc-btn" style="border-color:rgba(226,75,74,.5);color:#ff8080" onclick="deleteLoan('${l.id}')"><i class="ti ti-trash"></i> Eliminar préstamo</button>
+      </div>
+    </div>`;
+  }
 
   return `<div class="loan-card" style="${urgent ? 'box-shadow:0 0 0 2px var(--red),0 4px 20px rgba(226,75,74,.3)' : ''}">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;position:relative;z-index:1">
@@ -1783,10 +1815,10 @@ function saveLoan() {
   const dia = parseInt(document.getElementById('lm-dia').value) || null;
   const tasa = parseFloat(document.getElementById('lm-tasa').value) || 0;
 
-  if (!name || !numCuotas || !montoCuota || !fechaInicio) {
-    toast('⚠️ Completá nombre, cuotas, monto de cuota y fecha de inicio');
-    return;
-  }
+  if (!name) { toast('⚠️ Ingresá el nombre del préstamo'); return; }
+  if (!numCuotas || numCuotas <= 0 || isNaN(numCuotas)) { toast('⚠️ Ingresá la cantidad de cuotas (un número mayor a 0)'); return; }
+  if (!montoCuota || montoCuota <= 0 || isNaN(montoCuota)) { toast('⚠️ Ingresá el monto de cada cuota'); return; }
+  if (!fechaInicio) { toast('⚠️ Elegí la fecha de la primera cuota'); return; }
 
   if (id) {
     // Editar préstamo existente — solo actualiza datos generales, no toca cuotas ya creadas
@@ -1795,13 +1827,20 @@ function saveLoan() {
   } else {
     // Nuevo préstamo — genera el cronograma completo
     const installments = generateInstallments(total, numCuotas, montoCuota, fechaInicio, dia);
+    if (!installments.length) {
+      toast('⚠️ No se pudo generar el cronograma — revisá los datos ingresados');
+      console.error('generateInstallments devolvió vacío con:', { total, numCuotas, montoCuota, fechaInicio, dia });
+      return;
+    }
+    // Si no se especificó un total, lo calculamos como la suma de todas las cuotas
+    const totalFinal = total > 0 ? total : installments.reduce((s,c) => s + c.monto, 0);
     const data = recalcLoanTotals({
       id: String(Date.now()),
-      name, total, tasa, dia,
+      name, total: totalFinal, tasa, dia,
       installments
     });
     loans.push(data);
-    toast('✓ Préstamo creado con ' + numCuotas + ' cuotas');
+    toast('✓ Préstamo creado con ' + installments.length + ' cuotas');
   }
 
   persist();
@@ -1825,7 +1864,13 @@ function openScheduleModal(loanId) {
   const l = loans.find(x => x.id === loanId);
   if (!l) return;
   document.getElementById('schedule-modal-title').textContent = `Cuotas — ${l.name}`;
-  document.getElementById('schedule-list').innerHTML = (l.installments || []).map((c, i) => {
+  const insts = l.installments || [];
+  if (!insts.length) {
+    document.getElementById('schedule-list').innerHTML = '<div class="empty" style="padding:20px"><i class="ti ti-calendar-off"></i><p>Este préstamo no tiene cuotas generadas</p></div>';
+    document.getElementById('schedule-modal').classList.add('open');
+    return;
+  }
+  document.getElementById('schedule-list').innerHTML = insts.map((c, i) => {
     const vencida = !c.pagada && new Date(c.fecha) < new Date(new Date().toDateString());
     return `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:0.5px solid var(--border)">
       <div style="display:flex;align-items:center;gap:10px">
@@ -2148,6 +2193,7 @@ if (txs.length === 0) {
   }
   persist();
 }
+migrateOldLoans(); // convierte préstamos de versiones anteriores al nuevo formato con cuotas
 renderDashboard();
 updateAlertBadges();
 updateSyncBtn();
