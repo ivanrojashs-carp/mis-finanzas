@@ -109,6 +109,14 @@ Es decir: funciona, pero **no es tiempo real ni automático** — tenés que sin
 
 ---
 
+## 🆕 Novedades de esta versión
+
+- **Préstamos con cronograma de cuotas**: al crear un préstamo se genera automáticamente el calendario completo de cuotas (monto + fecha cada una). Cada cuota se puede editar individualmente desde "Ver cronograma" en la tarjeta del préstamo. El capital restante y el monto vencido sin pagar se calculan solos a partir de qué cuotas están marcadas como pagadas.
+- **Historial con filtros**: ahora se puede filtrar por rango de fechas (desde/hasta) y por categoría específica, sin estar limitado a un solo mes — podés ver todo el historial completo si querés.
+- **Editar movimientos**: cada fila del historial tiene un botón de editar (lápiz) además del de borrar, para corregir descripción, monto, fecha o categoría sin tener que eliminar y volver a cargar.
+
+> Si ya tenías el Apps Script conectado de una versión anterior, este sync agrega una hoja nueva "Cuotas Préstamos" al Sheet — se crea sola la próxima vez que sincronices, no hace falta hacer nada manual.
+
 ## 💾 Cómo funcionan los datos (resumen)
 
 - **Local**: todo se guarda automáticamente en el dispositivo (localStorage), funciona sin internet

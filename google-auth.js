@@ -70,8 +70,17 @@ window.gAuth = (() => {
     const cRows  = [['Nombre','Saldo ($)','Límite ($)','Día cierre','Día vencimiento','Pago mín %'],
       ...cards.map(c=>[c.name, c.saldo, c.limite||'', c.cierre||'', c.venc||'', c.minpct||''])];
 
-    const lRows  = [['Nombre','Total ($)','Saldo ($)','Cuota ($)','Día pago','Cuotas rest.','Tasa %'],
-      ...loans.map(l=>[l.name, l.total||'', l.saldo, l.cuota, l.dia||'', l.cuotas||'', l.tasa||''])];
+    const lRows  = [['Nombre','Total ($)','Saldo restante ($)','Vencido sin pagar ($)','Cant. cuotas','Cuotas pagadas','Tasa %'],
+      ...loans.map(l=>{
+        const insts = l.installments || [];
+        const pagadas = insts.filter(c=>c.pagada).length;
+        return [l.name, l.total||'', l.saldo||0, l.vencido||0, insts.length, pagadas, l.tasa||''];
+      })];
+
+    const cuotasRows = [['Préstamo','N° Cuota','Monto ($)','Fecha vencimiento','Pagada']];
+    loans.forEach(l => (l.installments || []).forEach(c => {
+      cuotasRows.push([l.name, c.numero, c.monto, c.fecha, c.pagada ? 'SI' : 'NO']);
+    }));
 
     const cfgRows = [['Clave','Valor'],
       ['email', alertConfig.email || ''],
@@ -89,6 +98,7 @@ window.gAuth = (() => {
         'Resumen mensual': sumRows,
         Tarjetas:        cRows,
         Préstamos:       lRows,
+        'Cuotas Préstamos': cuotasRows,
         Config:          cfgRows
       }
     };

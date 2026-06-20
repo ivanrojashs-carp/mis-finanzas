@@ -1,4 +1,4 @@
-const CACHE = 'mis-finanzas-v9';
+const CACHE = 'mis-finanzas-v11';
 const ASSETS = [
   './',
   './index.html',
@@ -13,8 +13,21 @@ self.addEventListener('install', e => {
   e.waitUntil(
     caches.open(CACHE).then(cache => {
       return Promise.allSettled(ASSETS.map(url => cache.add(url).catch(() => null)));
-    }).then(() => self.skipWaiting())
+    }).then(async () => {
+      // Si todavía no hay ningún cliente controlado, es la primera instalación —
+      // activamos directo. Si ya hay clientes (significa que es una actualización
+      // sobre una versión anterior), esperamos a que el usuario confirme.
+      const clients = await self.clients.matchAll();
+      if (clients.length === 0) self.skipWaiting();
+    })
   );
+});
+
+// Escucha el mensaje del botón "Actualizar ahora" en la app
+self.addEventListener('message', event => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 // Activate: delete old caches

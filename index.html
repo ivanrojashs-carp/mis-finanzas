@@ -139,6 +139,11 @@
   #toast { position: fixed; bottom: calc(70px + var(--safe-bottom)); left: 50%; transform: translateX(-50%) translateY(20px); background: var(--text); color: var(--surface); padding: 10px 20px; border-radius: 20px; font-size: 14px; opacity: 0; transition: all .3s; z-index: 300; white-space: nowrap; pointer-events: none; }
   #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
   @keyframes spin { to { transform: rotate(360deg); } }
+  /* Banner de actualización disponible */
+  #update-banner { position: fixed; top: 0; left: 0; right: 0; background: var(--green); color: #fff; padding: 12px 16px; padding-top: max(12px, env(safe-area-inset-top)); display: none; align-items: center; justify-content: space-between; gap: 10px; z-index: 400; font-size: 14px; box-shadow: 0 2px 10px rgba(0,0,0,.15); }
+  #update-banner.show { display: flex; }
+  #update-banner button { background: rgba(255,255,255,.25); border: none; color: #fff; padding: 7px 14px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+  #update-banner button:active { background: rgba(255,255,255,.4); }
 </style>
 </head>
 <body>
@@ -178,6 +183,7 @@
     <!-- AGREGAR -->
     <div class="screen" id="s-add">
       <div class="card">
+        <p id="add-form-title" style="font-size:15px;font-weight:600;margin-bottom:14px">Nuevo movimiento</p>
         <div class="tab-row" id="type-tabs">
           <button class="tab active" data-t="expense" onclick="setType(this)">Gasto</button>
           <button class="tab" data-t="income" onclick="setType(this)">Ingreso</button>
@@ -207,7 +213,7 @@
           <label>Nota (opcional)</label>
           <input id="f-note" type="text" placeholder="Ej: Débito, en cuotas..." autocomplete="off">
         </div>
-        <button class="btn primary" onclick="saveTx()"><i class="ti ti-check"></i> Guardar</button>
+        <button class="btn primary" id="add-form-submit" onclick="saveTx()"><i class="ti ti-check"></i> Guardar</button>
       </div>
     </div>
 
@@ -215,8 +221,23 @@
     <div class="screen" id="s-history">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
         <span style="font-size:17px;font-weight:600">Historial</span>
-        <select id="h-month" onchange="renderHistory()" style="font-size:13px;padding:7px 10px;border:0.5px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text)"></select>
+        <button class="btn sm" onclick="toggleHistoryFilters()"><i class="ti ti-filter"></i> Filtros</button>
       </div>
+
+      <div class="card" id="history-filters" style="display:none">
+        <div class="form-row">
+          <div class="form-group"><label>Desde</label><input id="h-date-from" type="date" onchange="renderHistory()"></div>
+          <div class="form-group"><label>Hasta</label><input id="h-date-to" type="date" onchange="renderHistory()"></div>
+        </div>
+        <div class="form-group">
+          <label>Categoría</label>
+          <select id="h-cat" onchange="renderHistory()" style="width:100%;padding:10px 13px;border:0.5px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font-size:15px">
+            <option value="">Todas las categorías</option>
+          </select>
+        </div>
+        <button class="btn sm" style="color:var(--text-muted)" onclick="clearHistoryFilters()"><i class="ti ti-x"></i> Limpiar filtros</button>
+      </div>
+
       <div class="tab-row" id="filter-tabs">
         <button class="tab active" data-f="all" onclick="setFilter(this)">Todos</button>
         <button class="tab" data-f="expense" onclick="setFilter(this)">Gastos</button>
@@ -224,6 +245,7 @@
         <button class="tab" data-f="savings" onclick="setFilter(this)">Ahorros</button>
         <button class="tab" data-f="debt" onclick="setFilter(this)">Deudas</button>
       </div>
+      <div id="h-summary" style="font-size:12px;color:var(--text-muted);margin-bottom:8px"></div>
       <div id="h-list"></div>
     </div>
 
@@ -471,19 +493,48 @@
     <div class="form-group"><label>Nombre del préstamo</label><input id="lm-name" type="text" placeholder="Ej: Préstamo Galicia, Cuota auto..."></div>
     <div class="form-row">
       <div class="form-group"><label>Monto total ($)</label><input id="lm-total" type="number" inputmode="decimal" placeholder="0"></div>
-      <div class="form-group"><label>Saldo restante ($)</label><input id="lm-saldo" type="number" inputmode="decimal" placeholder="0"></div>
+      <div class="form-group"><label>Cantidad de cuotas</label><input id="lm-cuotas" type="number" inputmode="numeric" min="1" placeholder="Ej: 24"></div>
     </div>
     <div class="form-row">
-      <div class="form-group"><label>Cuota mensual ($)</label><input id="lm-cuota" type="number" inputmode="decimal" placeholder="0"></div>
-      <div class="form-group"><label>Día de pago</label><input id="lm-dia" type="number" inputmode="numeric" min="1" max="31" placeholder="Ej: 10"></div>
-    </div>
-    <div class="form-row">
-      <div class="form-group"><label>Cuotas restantes</label><input id="lm-cuotas" type="number" inputmode="numeric" min="1" placeholder="Ej: 24"></div>
+      <div class="form-group"><label>Monto por cuota ($)</label><input id="lm-cuota" type="number" inputmode="decimal" placeholder="0"></div>
       <div class="form-group"><label>Tasa mensual (%)</label><input id="lm-tasa" type="number" inputmode="decimal" placeholder="0" step="0.1"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Fecha 1ª cuota</label><input id="lm-fecha-inicio" type="date"></div>
+      <div class="form-group"><label>Día de pago (mensual)</label><input id="lm-dia" type="number" inputmode="numeric" min="1" max="31" placeholder="Ej: 10"></div>
+    </div>
+    <div class="alert info" id="lm-edit-warning" style="display:none;margin-bottom:14px">
+      <i class="ti ti-info-circle"></i>
+      <div class="alert-body" style="font-size:12px">Editar estos campos generales NO modifica las cuotas individuales ya creadas. Para eso usá "Ver cronograma de cuotas" en la tarjeta del préstamo.</div>
     </div>
     <button class="btn primary" style="margin-bottom:8px" onclick="saveLoan()"><i class="ti ti-check"></i> Guardar préstamo</button>
     <button class="btn" onclick="closeLoanModal()">Cancelar</button>
   </div>
+</div>
+
+<!-- Modal Cronograma de Cuotas -->
+<div class="overlay" id="schedule-modal" onclick="if(event.target===this)closeScheduleModal()">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="schedule-modal-title">Cronograma de cuotas</div>
+    <div id="schedule-list" style="max-height:50vh;overflow-y:auto;margin-bottom:14px"></div>
+    <button class="btn" onclick="closeScheduleModal()">Cerrar</button>
+  </div>
+</div>
+
+<!-- Modal Editar Cuota Individual -->
+<div class="overlay" id="installment-modal" onclick="if(event.target===this)closeInstallmentModal()">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Editar cuota</div>
+    <input type="hidden" id="im-loan-id">
+    <input type="hidden" id="im-index">
+    <div class="form-group"><label>Monto de la cuota ($)</label><input id="im-amount" type="number" inputmode="decimal" placeholder="0"></div>
+    <div class="form-group"><label>Fecha de vencimiento</label><input id="im-date" type="date"></div>
+    <button class="btn primary" style="margin-bottom:8px" onclick="saveInstallmentEdit()"><i class="ti ti-check"></i> Guardar cambios</button>
+    <button class="btn" onclick="closeInstallmentModal()">Cancelar</button>
+  </div>
+</div>
 </div>
 
 <!-- Modal Datos / Drive -->
@@ -494,6 +545,11 @@
     <div id="drive-content"></div>
     <input type="file" id="import-file" accept=".json,.xlsx,.xls" style="display:none" onchange="handleImportFile(this)">
   </div>
+</div>
+
+<div id="update-banner">
+  <span><i class="ti ti-sparkles"></i> Hay una actualización disponible</span>
+  <button onclick="applyUpdate()">Actualizar ahora</button>
 </div>
 
 <div id="toast"></div>
@@ -528,6 +584,7 @@ let cards = JSON.parse(localStorage.getItem('mf_cards') || '[]');
 let loans = JSON.parse(localStorage.getItem('mf_loans') || '[]');
 let alertConfig = JSON.parse(localStorage.getItem('mf_alert_config') || '{"email":"","cards":true,"loans":true,"budget":true,"deficit":true,"days":5}');
 let currentType = 'expense';
+let editingTxId = null;
 let histFilter = 'all';
 let pieInst = null, barInst = null;
 
@@ -570,12 +627,14 @@ function goto(id) {
   document.getElementById('s-' + id).classList.add('active');
   document.getElementById('nav-' + id).classList.add('active');
   if (id === 'dashboard') renderDashboard();
+  if (id === 'add' && !editingTxId) resetAddForm(); // entrada "limpia" desde el navbar, no desde editTx
   if (id === 'cards') renderCards();
   if (id === 'loans') renderLoans();
   if (id === 'balance') renderBalance();
   if (id === 'budget') renderBudget();
   if (id === 'analysis') renderAnalysis();
   if (id === 'settings') renderSettings();
+  if (id !== 'add') editingTxId = null; // salir de "Agregar" sin guardar cancela la edición
 }
 
 // Badge de alerta en tarjetas y préstamos si hay vencimiento próximo
@@ -590,11 +649,14 @@ function updateAlertBadges() {
   });
   document.getElementById('nav-cards').classList.toggle('nav-badge', cardDue);
 
-  // Préstamos
+  // Préstamos — basado en la próxima cuota pendiente de cada uno
+  const hoyDate2 = new Date(); hoyDate2.setHours(0,0,0,0);
   const loanDue = loans.some(l => {
-    if (!l.dia || l.saldo <= 0) return false;
-    const d = l.dia >= today ? l.dia - today : (31 - today) + l.dia;
-    return d <= 5;
+    const pendientes = (l.installments || []).filter(c => !c.pagada);
+    if (!pendientes.length) return false;
+    const proxima = pendientes.sort((a,b) => a.fecha.localeCompare(b.fecha))[0];
+    const dias = Math.ceil((new Date(proxima.fecha) - hoyDate2) / (1000*60*60*24));
+    return dias <= 5;
   });
   document.getElementById('nav-loans').classList.toggle('nav-badge', loanDue);
 }
@@ -648,13 +710,18 @@ function renderDashboard() {
     else if (daysUntil <= 7) alerts.unshift({ t: 'warning', i: 'ti-credit-card', msg: `<b>${c.name}</b> vence el día <b>${c.venc}</b> (en ${daysUntil} días). Saldo: ${fmt(c.saldo)}` });
   });
 
-  // Alertas de vencimiento de préstamos
+  // Alertas de vencimiento de préstamos (basadas en próxima cuota pendiente)
+  const hoyDate = new Date(); hoyDate.setHours(0,0,0,0);
   loans.forEach(l => {
-    if (!l.dia || l.saldo <= 0) return;
-    const daysUntil = l.dia >= today ? l.dia - today : (31 - today) + l.dia;
-    if (daysUntil === 0) alerts.unshift({ t: 'danger', i: 'ti-building-bank', msg: `<b>¡Hoy vence cuota de ${l.name}!</b> Monto: ${fmt(l.cuota)}` });
-    else if (daysUntil <= 3) alerts.unshift({ t: 'danger', i: 'ti-building-bank', msg: `<b>${l.name}</b>: cuota vence en <b>${daysUntil} días</b> (día ${l.dia}). ${fmt(l.cuota)}` });
-    else if (daysUntil <= 7) alerts.unshift({ t: 'warning', i: 'ti-building-bank', msg: `<b>${l.name}</b>: cuota el día <b>${l.dia}</b> (en ${daysUntil} días). ${fmt(l.cuota)}` });
+    const pendientes = (l.installments || []).filter(c => !c.pagada).sort((a,b) => a.fecha.localeCompare(b.fecha));
+    const proxima = pendientes[0];
+    if (!proxima) return;
+    const fechaCuota = new Date(proxima.fecha);
+    const daysUntil = Math.ceil((fechaCuota - hoyDate) / (1000*60*60*24));
+    if (daysUntil < 0) alerts.unshift({ t: 'danger', i: 'ti-building-bank', msg: `<b>${l.name}</b>: cuota vencida hace <b>${Math.abs(daysUntil)} día(s)</b> sin pagar. ${fmt(proxima.monto)}` });
+    else if (daysUntil === 0) alerts.unshift({ t: 'danger', i: 'ti-building-bank', msg: `<b>¡Hoy vence cuota de ${l.name}!</b> Monto: ${fmt(proxima.monto)}` });
+    else if (daysUntil <= 3) alerts.unshift({ t: 'danger', i: 'ti-building-bank', msg: `<b>${l.name}</b>: cuota vence en <b>${daysUntil} día(s)</b>. ${fmt(proxima.monto)}` });
+    else if (daysUntil <= 7) alerts.unshift({ t: 'warning', i: 'ti-building-bank', msg: `<b>${l.name}</b>: cuota vence en ${daysUntil} días. ${fmt(proxima.monto)}` });
   });
 
   document.getElementById('d-alerts').innerHTML = alerts.map(a =>
@@ -695,11 +762,13 @@ function txRow(t, showDelete) {
     <div class="tx-icon" style="background:${color}22;color:${color}"><i class="ti ${ICONS[t.type]}"></i></div>
     <div class="tx-info">
       <div class="tx-name">${t.desc}</div>
-      <div class="tx-meta"><span class="pill ${t.type}">${LABELS[t.type]}</span> ${t.cat} · ${t.date.slice(8, 10)}/${t.date.slice(5, 7)}${t.note ? ' · ' + t.note : ''}</div>
+      <div class="tx-meta"><span class="pill ${t.type}">${LABELS[t.type]}</span> ${t.cat} · ${t.date.slice(8, 10)}/${t.date.slice(5, 7)}/${t.date.slice(0,4)}${t.note ? ' · ' + t.note : ''}</div>
     </div>
-    <div style="display:flex;align-items:center;gap:8px">
+    <div style="display:flex;align-items:center;gap:6px">
       <div class="tx-amount" style="color:${t.type === 'income' ? 'var(--green)' : 'var(--text)'}">${sign}${fmt(t.amount)}</div>
-      ${showDelete ? `<button class="delete-btn" onclick="deleteTx(${t.id})"><i class="ti ti-trash"></i></button>` : ''}
+      ${showDelete ? `
+        <button class="delete-btn" onclick="editTx(${t.id})" title="Editar"><i class="ti ti-edit"></i></button>
+        <button class="delete-btn" onclick="deleteTx(${t.id})" title="Eliminar"><i class="ti ti-trash"></i></button>` : ''}
     </div>
   </div>`;
 }
@@ -729,15 +798,61 @@ function saveTx() {
   const note = document.getElementById('f-note').value.trim();
   const chip = document.querySelector('#f-cats .chip.on');
   if (!desc || !amount || !date) { toast('⚠️ Completá descripción, monto y fecha'); return; }
-  const tx = { id: Date.now(), type: currentType, desc, amount, date, cat: chip ? chip.textContent : 'Otros', note };
-  txs.unshift(tx);
-  persist();
+  const cat = chip ? chip.textContent : 'Otros';
+
+  if (editingTxId) {
+    // Modo edición: actualiza el movimiento existente en su lugar
+    txs = txs.map(t => t.id === editingTxId ? { ...t, type: currentType, desc, amount, date, cat, note } : t);
+    toast('✓ Movimiento actualizado');
+    editingTxId = null;
+    resetAddForm();
+    persist();
+    renderHistory();
+    goto('history');
+  } else {
+    const tx = { id: Date.now(), type: currentType, desc, amount, date, cat, note };
+    txs.unshift(tx);
+    toast('✓ Movimiento guardado');
+    resetAddForm();
+    persist();
+    goto('dashboard');
+  }
+}
+
+function resetAddForm() {
   document.getElementById('f-desc').value = '';
   document.getElementById('f-amount').value = '';
   document.getElementById('f-note').value = '';
   document.querySelectorAll('#f-cats .chip').forEach(c => c.classList.remove('on'));
-  toast('✓ Movimiento guardado');
-  goto('dashboard');
+  document.getElementById('add-form-title').textContent = 'Nuevo movimiento';
+  document.getElementById('add-form-submit').innerHTML = '<i class="ti ti-check"></i> Guardar';
+}
+
+function editTx(id) {
+  const t = txs.find(x => x.id === id);
+  if (!t) return;
+  editingTxId = id;
+
+  // Activar el tab de tipo correspondiente y cargar categorías
+  currentType = t.type;
+  document.querySelectorAll('#type-tabs .tab').forEach(b => b.classList.toggle('active', b.dataset.t === t.type));
+  renderCats();
+
+  document.getElementById('f-desc').value = t.desc;
+  document.getElementById('f-amount').value = t.amount;
+  document.getElementById('f-date').value = t.date;
+  document.getElementById('f-note').value = t.note || '';
+
+  // Marcar la categoría correspondiente como seleccionada
+  setTimeout(() => {
+    document.querySelectorAll('#f-cats .chip').forEach(c => {
+      c.classList.toggle('on', c.textContent === t.cat);
+    });
+  }, 0);
+
+  document.getElementById('add-form-title').textContent = 'Editar movimiento';
+  document.getElementById('add-form-submit').innerHTML = '<i class="ti ti-check"></i> Guardar cambios';
+  goto('add');
 }
 
 function deleteTx(id) {
@@ -756,16 +871,52 @@ function setFilter(btn) {
 }
 
 function renderHistory() {
-  const sel = document.getElementById('h-month');
-  const months = [...new Set(txs.map(t => t.date.slice(0, 7)))].sort().reverse();
-  if (!months.length) months.push(curMonth());
-  const cur = sel.value || months[0];
-  sel.innerHTML = months.map(m => `<option value="${m}" ${m === cur ? 'selected' : ''}>${m.slice(5, 7)}/${m.slice(0, 4)}</option>`).join('');
-  let list = monthTxs(sel.value || months[0]).sort((a, b) => b.date.localeCompare(a.date));
+  // Poblar categorías disponibles (todas las usadas alguna vez en transacciones)
+  const catSel = document.getElementById('h-cat');
+  const usedCats = [...new Set(txs.map(t => t.cat))].sort();
+  const curCat = catSel.value;
+  catSel.innerHTML = '<option value="">Todas las categorías</option>' +
+    usedCats.map(c => `<option value="${c}" ${c === curCat ? 'selected' : ''}>${c}</option>`).join('');
+
+  const dateFrom = document.getElementById('h-date-from').value;
+  const dateTo = document.getElementById('h-date-to').value;
+  const cat = document.getElementById('h-cat').value;
+
+  let list = [...txs];
+
+  // Filtro por tipo (gasto/ingreso/etc)
   if (histFilter !== 'all') list = list.filter(t => t.type === histFilter);
+
+  // Filtro por categoría
+  if (cat) list = list.filter(t => t.cat === cat);
+
+  // Filtro por rango de fechas — si no hay rango definido, muestra TODO el historial
+  if (dateFrom) list = list.filter(t => t.date >= dateFrom);
+  if (dateTo) list = list.filter(t => t.date <= dateTo);
+
+  list.sort((a, b) => b.date.localeCompare(a.date));
+
+  // Resumen de cuántos resultados y el total filtrado
+  const total = list.reduce((s, t) => s + (t.type === 'income' ? t.amount : -t.amount), 0);
+  document.getElementById('h-summary').textContent = list.length
+    ? `${list.length} movimiento(s) · Neto: ${fmt(total)}`
+    : '';
+
   document.getElementById('h-list').innerHTML = list.length === 0
-    ? '<div class="empty"><i class="ti ti-receipt"></i><p>Sin movimientos</p></div>'
+    ? '<div class="empty"><i class="ti ti-receipt"></i><p>Sin movimientos con estos filtros</p></div>'
     : `<div class="card">${list.map(t => txRow(t, true)).join('')}</div>`;
+}
+
+function toggleHistoryFilters() {
+  const el = document.getElementById('history-filters');
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+function clearHistoryFilters() {
+  document.getElementById('h-date-from').value = '';
+  document.getElementById('h-date-to').value = '';
+  document.getElementById('h-cat').value = '';
+  renderHistory();
 }
 
 // ─── BUDGET ──────────────────────────────────────────────────────────────────
@@ -1518,28 +1669,66 @@ function calcSim() {
 }
 
 // ─── PRÉSTAMOS ────────────────────────────────────────────────────────────────
+// ─── PRÉSTAMOS — con cronograma de cuotas individuales ────────────────────────
+
+// Genera el array de cuotas para un préstamo nuevo
+function generateInstallments(total, numCuotas, montoCuota, fechaInicio, diaPago) {
+  const installments = [];
+  const [y, m, d] = fechaInicio.split('-').map(Number);
+  for (let i = 0; i < numCuotas; i++) {
+    const fecha = new Date(y, m - 1 + i, diaPago || d || 1);
+    installments.push({
+      numero: i + 1,
+      monto: montoCuota,
+      fecha: `${fecha.getFullYear()}-${String(fecha.getMonth()+1).padStart(2,'0')}-${String(fecha.getDate()).padStart(2,'0')}`,
+      pagada: false
+    });
+  }
+  return installments;
+}
+
+// Recalcula saldo restante y monto vencido sin pagar a partir de las cuotas
+function recalcLoanTotals(loan) {
+  const hoy = new Date(); hoy.setHours(0,0,0,0);
+  const insts = loan.installments || [];
+  const saldo = insts.filter(c => !c.pagada).reduce((s,c) => s + c.monto, 0);
+  const vencidoSinPagar = insts.filter(c => !c.pagada && new Date(c.fecha) < hoy).reduce((s,c) => s + c.monto, 0);
+  return { ...loan, saldo, vencido: vencidoSinPagar };
+}
+
 function renderLoans() {
   const el = document.getElementById('loans-list');
   if (!loans.length) {
     el.innerHTML = '<div class="empty" style="padding:30px 20px"><i class="ti ti-building-bank"></i><p>No tenés préstamos cargados</p></div>';
     return;
   }
+  // Recalcular totales antes de pintar, por si hubo cambios en cuotas
+  loans = loans.map(recalcLoanTotals);
+  persist();
   el.innerHTML = loans.map(l => loanHTML(l)).join('');
 }
 
 function loanHTML(l) {
-  const today = new Date().getDate();
-  const daysUntil = l.dia ? (l.dia >= today ? l.dia - today : (31 - today) + l.dia) : null;
-  const urgent = daysUntil !== null && daysUntil <= 5 && l.saldo > 0;
+  const insts = l.installments || [];
+  const pendientes = insts.filter(c => !c.pagada);
+  const proxima = pendientes.sort((a,b) => a.fecha.localeCompare(b.fecha))[0];
+
+  const today = new Date(); today.setHours(0,0,0,0);
+  let daysUntil = null, urgent = false;
+  if (proxima) {
+    const fechaCuota = new Date(proxima.fecha);
+    daysUntil = Math.ceil((fechaCuota - today) / (1000*60*60*24));
+    urgent = daysUntil <= 5;
+  }
+
   const pct = l.total > 0 ? Math.min(((l.total - l.saldo) / l.total) * 100, 100) : 0;
-  const mesesRest = l.cuota > 0 && l.saldo > 0 ? Math.ceil(l.saldo / l.cuota) : l.cuotas;
 
   return `<div class="loan-card" style="${urgent ? 'box-shadow:0 0 0 2px var(--red),0 4px 20px rgba(226,75,74,.3)' : ''}">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;position:relative;z-index:1">
       <div>
         <div class="cc-name">${l.name} ${urgent ? '🔴' : ''}</div>
         <div class="cc-meta">
-          ${l.dia ? `Día de pago: ${l.dia}${daysUntil !== null ? ` (en ${daysUntil}d)` : ''}` : ''}
+          ${proxima ? `Próxima cuota: ${proxima.fecha.slice(8,10)}/${proxima.fecha.slice(5,7)} ${daysUntil >= 0 ? `(en ${daysUntil}d)` : `(¡vencida hace ${Math.abs(daysUntil)}d!)`}` : 'Sin cuotas pendientes'}
           ${l.tasa ? ` · TNA aprox. ${(l.tasa * 12).toFixed(1)}%` : ''}
         </div>
       </div>
@@ -1549,17 +1738,20 @@ function loanHTML(l) {
       </div>
     </div>
     <div class="cc-saldo">${fmt(l.saldo)}</div>
-    <div class="cc-meta" style="margin-bottom:8px">
-      Saldo restante · Cuota: <b style="color:#fff">${fmt(l.cuota)}/mes</b>
-      ${mesesRest ? ` · ~${mesesRest} cuotas restantes` : ''}
+    <div class="cc-meta" style="margin-bottom:4px">
+      Capital restante · ${pendientes.length} cuota(s) pendiente(s)
     </div>
+    ${l.vencido > 0 ? `
+      <div class="cc-meta" style="margin-bottom:8px;color:#ff8080;font-weight:600">
+        ⚠️ Vencido sin pagar: ${fmt(l.vencido)}
+      </div>` : '<div style="margin-bottom:8px"></div>'}
     ${l.total > 0 ? `
       <div style="height:4px;background:rgba(255,255,255,.2);border-radius:2px;margin-bottom:12px;position:relative;z-index:1">
         <div style="height:100%;width:${pct}%;background:#6bcb77;border-radius:2px"></div>
       </div>
       <div class="cc-meta" style="margin-bottom:4px">Pagado: ${pct.toFixed(0)}% de ${fmt(l.total)}</div>` : '<div style="margin-bottom:12px"></div>'}
     <div class="cc-actions">
-      <button class="cc-btn" onclick="payLoanInstallment('${l.id}')"><i class="ti ti-check"></i> Registrar cuota pagada</button>
+      <button class="cc-btn" onclick="openScheduleModal('${l.id}')"><i class="ti ti-calendar"></i> Ver cronograma</button>
     </div>
   </div>`;
 }
@@ -1567,14 +1759,15 @@ function loanHTML(l) {
 function openLoanModal(id) {
   const l = id ? loans.find(x => x.id === id) : null;
   document.getElementById('loan-modal-title').textContent = l ? 'Editar préstamo' : 'Nuevo préstamo';
+  document.getElementById('lm-edit-warning').style.display = l ? 'flex' : 'none';
   document.getElementById('lm-id').value = l ? l.id : '';
   document.getElementById('lm-name').value = l ? l.name : '';
   document.getElementById('lm-total').value = l ? (l.total || '') : '';
-  document.getElementById('lm-saldo').value = l ? l.saldo : '';
-  document.getElementById('lm-cuota').value = l ? l.cuota : '';
-  document.getElementById('lm-dia').value = l ? (l.dia || '') : '';
-  document.getElementById('lm-cuotas').value = l ? (l.cuotas || '') : '';
+  document.getElementById('lm-cuotas').value = l ? (l.installments?.length || '') : '';
+  document.getElementById('lm-cuota').value = l ? (l.installments?.[0]?.monto || '') : '';
   document.getElementById('lm-tasa').value = l ? (l.tasa || '') : '';
+  document.getElementById('lm-fecha-inicio').value = l ? (l.installments?.[0]?.fecha || '') : new Date().toISOString().slice(0,10);
+  document.getElementById('lm-dia').value = l ? (l.dia || '') : '';
   document.getElementById('loan-modal').classList.add('open');
 }
 
@@ -1583,30 +1776,43 @@ function closeLoanModal() { document.getElementById('loan-modal').classList.remo
 function saveLoan() {
   const id = document.getElementById('lm-id').value;
   const name = document.getElementById('lm-name').value.trim();
-  const cuota = parseFloat(document.getElementById('lm-cuota').value);
-  if (!name || !cuota) { toast('⚠️ Ingresá nombre y cuota mensual'); return; }
-  const data = {
-    id: id || String(Date.now()),
-    name,
-    total: parseFloat(document.getElementById('lm-total').value) || 0,
-    saldo: parseFloat(document.getElementById('lm-saldo').value) || 0,
-    cuota,
-    dia: parseInt(document.getElementById('lm-dia').value) || null,
-    cuotas: parseInt(document.getElementById('lm-cuotas').value) || null,
-    tasa: parseFloat(document.getElementById('lm-tasa').value) || 0
-  };
-  if (id) loans = loans.map(l => l.id === id ? data : l);
-  else loans.push(data);
+  const total = parseFloat(document.getElementById('lm-total').value) || 0;
+  const numCuotas = parseInt(document.getElementById('lm-cuotas').value);
+  const montoCuota = parseFloat(document.getElementById('lm-cuota').value);
+  const fechaInicio = document.getElementById('lm-fecha-inicio').value;
+  const dia = parseInt(document.getElementById('lm-dia').value) || null;
+  const tasa = parseFloat(document.getElementById('lm-tasa').value) || 0;
+
+  if (!name || !numCuotas || !montoCuota || !fechaInicio) {
+    toast('⚠️ Completá nombre, cuotas, monto de cuota y fecha de inicio');
+    return;
+  }
+
+  if (id) {
+    // Editar préstamo existente — solo actualiza datos generales, no toca cuotas ya creadas
+    loans = loans.map(l => l.id === id ? recalcLoanTotals({ ...l, name, total, tasa, dia }) : l);
+    toast('✓ Préstamo actualizado (las cuotas no se modificaron)');
+  } else {
+    // Nuevo préstamo — genera el cronograma completo
+    const installments = generateInstallments(total, numCuotas, montoCuota, fechaInicio, dia);
+    const data = recalcLoanTotals({
+      id: String(Date.now()),
+      name, total, tasa, dia,
+      installments
+    });
+    loans.push(data);
+    toast('✓ Préstamo creado con ' + numCuotas + ' cuotas');
+  }
+
   persist();
   closeLoanModal();
   renderLoans();
   updateAlertBadges();
-  toast(id ? '✓ Préstamo actualizado' : '✓ Préstamo guardado');
 }
 
 function deleteLoan(id) {
   const l = loans.find(x => x.id === id);
-  if (!confirm(`¿Eliminar "${l?.name}"?`)) return;
+  if (!confirm(`¿Eliminar "${l?.name}"? Se borran todas sus cuotas.`)) return;
   loans = loans.filter(x => x.id !== id);
   persist();
   renderLoans();
@@ -1614,17 +1820,72 @@ function deleteLoan(id) {
   toast('✓ Préstamo eliminado');
 }
 
-function payLoanInstallment(id) {
-  const l = loans.find(x => x.id === id);
+// ── Cronograma de cuotas ───────────────────────────────────────────────────
+function openScheduleModal(loanId) {
+  const l = loans.find(x => x.id === loanId);
   if (!l) return;
-  if (!confirm(`¿Registrar pago de cuota ${fmt(l.cuota)} para "${l.name}"?`)) return;
-  loans = loans.map(x => x.id === id
-    ? { ...x, saldo: Math.max(0, x.saldo - x.cuota), cuotas: x.cuotas ? Math.max(0, x.cuotas - 1) : x.cuotas }
-    : x);
+  document.getElementById('schedule-modal-title').textContent = `Cuotas — ${l.name}`;
+  document.getElementById('schedule-list').innerHTML = (l.installments || []).map((c, i) => {
+    const vencida = !c.pagada && new Date(c.fecha) < new Date(new Date().toDateString());
+    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:0.5px solid var(--border)">
+      <div style="display:flex;align-items:center;gap:10px">
+        <input type="checkbox" ${c.pagada ? 'checked' : ''} onchange="toggleInstallmentPaid('${loanId}', ${i})" style="width:20px;height:20px;cursor:pointer">
+        <div>
+          <div style="font-size:14px;font-weight:500;${c.pagada ? 'text-decoration:line-through;opacity:.5' : ''}">Cuota ${c.numero} — ${fmt(c.monto)}</div>
+          <div style="font-size:12px;color:${vencida ? 'var(--red)' : 'var(--text-muted)'}">${c.fecha.slice(8,10)}/${c.fecha.slice(5,7)}/${c.fecha.slice(0,4)} ${vencida ? '· VENCIDA' : ''}</div>
+        </div>
+      </div>
+      <button class="delete-btn" onclick="openInstallmentEdit('${loanId}', ${i})" title="Editar esta cuota"><i class="ti ti-edit"></i></button>
+    </div>`;
+  }).join('');
+  document.getElementById('schedule-modal').classList.add('open');
+}
+
+function closeScheduleModal() { document.getElementById('schedule-modal').classList.remove('open'); }
+
+function toggleInstallmentPaid(loanId, index) {
+  loans = loans.map(l => {
+    if (l.id !== loanId) return l;
+    const installments = l.installments.map((c, i) => i === index ? { ...c, pagada: !c.pagada } : c);
+    return recalcLoanTotals({ ...l, installments });
+  });
   persist();
+  openScheduleModal(loanId); // refresca el modal abierto
   renderLoans();
   updateAlertBadges();
-  toast(`✓ Cuota de ${fmt(l.cuota)} registrada`);
+  toast('✓ Cuota actualizada');
+}
+
+function openInstallmentEdit(loanId, index) {
+  const l = loans.find(x => x.id === loanId);
+  const c = l.installments[index];
+  document.getElementById('im-loan-id').value = loanId;
+  document.getElementById('im-index').value = index;
+  document.getElementById('im-amount').value = c.monto;
+  document.getElementById('im-date').value = c.fecha;
+  document.getElementById('installment-modal').classList.add('open');
+}
+
+function closeInstallmentModal() { document.getElementById('installment-modal').classList.remove('open'); }
+
+function saveInstallmentEdit() {
+  const loanId = document.getElementById('im-loan-id').value;
+  const index = parseInt(document.getElementById('im-index').value);
+  const monto = parseFloat(document.getElementById('im-amount').value);
+  const fecha = document.getElementById('im-date').value;
+  if (!monto || !fecha) { toast('⚠️ Completá monto y fecha'); return; }
+
+  loans = loans.map(l => {
+    if (l.id !== loanId) return l;
+    const installments = l.installments.map((c, i) => i === index ? { ...c, monto, fecha } : c);
+    return recalcLoanTotals({ ...l, installments });
+  });
+  persist();
+  closeInstallmentModal();
+  openScheduleModal(loanId);
+  renderLoans();
+  updateAlertBadges();
+  toast('✓ Cuota modificada');
 }
 
 // ─── BALANCE HISTÓRICO ────────────────────────────────────────────────────────
@@ -1877,10 +2138,13 @@ if (txs.length === 0) {
     }];
   }
   if (!loans.length) {
-    loans = [{
-      id: 'loan1', name: 'Préstamo Galicia', total: 1200000, saldo: 900000,
-      cuota: 75000, dia: 10, cuotas: 12, tasa: 4.5
-    }];
+    const baseLoan = {
+      id: 'loan1', name: 'Préstamo Galicia', total: 1200000, tasa: 4.5, dia: 10,
+      installments: generateInstallments(1200000, 16, 75000, m + '-10', 10)
+    };
+    // Marcar las primeras 4 cuotas como ya pagadas, simulando un préstamo en curso
+    baseLoan.installments = baseLoan.installments.map((c, i) => i < 4 ? { ...c, pagada: true } : c);
+    loans = [recalcLoanTotals(baseLoan)];
   }
   persist();
 }
@@ -1889,9 +2153,56 @@ updateAlertBadges();
 updateSyncBtn();
 if (window.gAuth && window.gAuth.isSignedIn()) startAutoSyncInterval();
 
-// Service Worker
+// ─── SERVICE WORKER + DETECCIÓN DE ACTUALIZACIONES ───────────────────────────
+let _newWorker = null;
+
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('sw.js').catch(() => {});
+  navigator.serviceWorker.register('sw.js').then(reg => {
+    // Revisa si ya hay una actualización esperando (instalada pero no activa)
+    if (reg.waiting) {
+      _newWorker = reg.waiting;
+      showUpdateBanner();
+    }
+
+    // Detecta cuando se está instalando una nueva versión
+    reg.addEventListener('updatefound', () => {
+      const installing = reg.installing;
+      if (!installing) return;
+      installing.addEventListener('statechange', () => {
+        if (installing.state === 'installed' && navigator.serviceWorker.controller) {
+          _newWorker = installing;
+          showUpdateBanner();
+        }
+      });
+    });
+
+    // Revisa manualmente si hay una versión nueva en el servidor cada vez que se abre la app
+    reg.update().catch(() => {});
+
+    // Y de nuevo cada 5 minutos mientras la app sigue abierta
+    setInterval(() => reg.update().catch(() => {}), 5 * 60 * 1000);
+  }).catch(() => {});
+
+  // Cuando el SW nuevo toma control, recargamos la página una sola vez
+  let _reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (_reloaded) return;
+    _reloaded = true;
+    location.reload();
+  });
+}
+
+function showUpdateBanner() {
+  document.getElementById('update-banner').classList.add('show');
+}
+
+function applyUpdate() {
+  if (_newWorker) {
+    _newWorker.postMessage({ type: 'SKIP_WAITING' });
+  } else {
+    location.reload();
+  }
+  document.getElementById('update-banner').classList.remove('show');
 }
 </script>
 </body>

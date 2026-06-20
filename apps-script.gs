@@ -102,16 +102,30 @@ function _hojaATarjetas(ss) {
 
 function _hojaAPrestamos(ss) {
   const rows = _leerHoja(ss, 'Préstamos');
-  return rows.map((r, i) => ({
-    id: 'loan_' + i,
-    name: r['Nombre'],
-    total: parseFloat(r['Total ($)']) || 0,
-    saldo: parseFloat(r['Saldo ($)']) || 0,
-    cuota: parseFloat(r['Cuota ($)']) || 0,
-    dia: parseInt(r['Día pago']) || null,
-    cuotas: parseInt(r['Cuotas rest.']) || null,
-    tasa: parseFloat(r['Tasa %']) || 0
-  })).filter(l => l.name);
+  const cuotasRows = _leerHoja(ss, 'Cuotas Préstamos');
+
+  return rows.map((r, i) => {
+    const name = r['Nombre'];
+    const installments = cuotasRows
+      .filter(c => c['Préstamo'] === name)
+      .map(c => ({
+        numero: parseInt(c['N° Cuota']) || 0,
+        monto: parseFloat(c['Monto ($)']) || 0,
+        fecha: _fechaAISO(c['Fecha vencimiento']),
+        pagada: c['Pagada'] === 'SI'
+      }))
+      .sort((a,b) => a.numero - b.numero);
+
+    return {
+      id: 'loan_' + i,
+      name,
+      total: parseFloat(r['Total ($)']) || 0,
+      saldo: parseFloat(r['Saldo restante ($)']) || 0,
+      vencido: parseFloat(r['Vencido sin pagar ($)']) || 0,
+      tasa: parseFloat(r['Tasa %']) || 0,
+      installments
+    };
+  }).filter(l => l.name);
 }
 
 // ── Normaliza fechas que Sheets puede devolver como objeto Date ───────────
@@ -129,13 +143,29 @@ function _fechaAISO(valor) {
 // ── Maneja requests POST (sincronización desde la app) ─────────────────────
 function doPost(e) {
   try {
-    const data = JSON.parse(e.postData.contents);
+    if (!e || !e.postData || !e.postData.contents) {
+      return _resp({ status: 'error', message: 'No llegaron datos en el POST (postData vacío). Puede ser un problema de redirección del navegador.' });
+    }
+
+    let data;
+    try {
+      data = JSON.parse(e.postData.contents);
+    } catch(parseErr) {
+      return _resp({ status: 'error', message: 'El body recibido no es JSON válido: ' + e.postData.contents.slice(0, 200) });
+    }
+
+    if (!data || typeof data !== 'object') {
+      return _resp({ status: 'error', message: 'El JSON recibido no es un objeto válido' });
+    }
 
     if (data.secret !== SECRET) {
-      return _resp({ status: 'error', message: 'Clave incorrecta' });
+      return _resp({ status: 'error', message: 'Clave incorrecta (recibida: "' + (data.secret || '(vacía)') + '")' });
     }
 
     const ss = _getSheet();
+    if (!ss) {
+      return _resp({ status: 'error', message: 'No se pudo abrir el Sheet con ID ' + SHEET_ID + '. Verificá que el ID sea correcto y que la cuenta tenga acceso.' });
+    }
 
     const sheetDefs = data.sheets || {};
     Object.entries(sheetDefs).forEach(([name, rows]) => {
@@ -157,6 +187,7 @@ function doPost(e) {
 
 // ── Escribe (o limpia y reescribe) una hoja ────────────────────────────────
 function _writeSheet(ss, name, rows) {
+  if (!ss) throw new Error('_writeSheet recibió ss=null al intentar escribir "' + name + '"');
   if (!rows || !rows.length) return;
   let sheet = ss.getSheetByName(name);
   if (!sheet) sheet = ss.insertSheet(name);
@@ -168,7 +199,7 @@ function _writeSheet(ss, name, rows) {
 function _formatSheets(ss) {
   const GREEN  = '#1D9E75';
   const WHITE  = '#FFFFFF';
-  const SHEETS = ['Transacciones','Presupuestos','Resumen mensual','Tarjetas','Préstamos','Config'];
+  const SHEETS = ['Transacciones','Presupuestos','Resumen mensual','Tarjetas','Préstamos','Cuotas Préstamos','Config'];
 
   SHEETS.forEach(name => {
     const sheet = ss.getSheetByName(name);
@@ -231,16 +262,20 @@ function enviarAlertasDiarias() {
     });
   }
 
-  // ── Préstamos ─────────────────────────────────────────────────────────────
+  // ── Préstamos — basado en cuotas individuales pendientes ───────────────────
   if (cfg.avisar_prestamos === 'SI') {
-    const loans = _leerHoja(ss, 'Préstamos');
-    loans.forEach(l => {
-      const saldo = parseFloat(l['Saldo ($)']) || 0;
-      const dia = parseInt(l['Día pago']);
-      if (!dia || saldo <= 0) return;
-      const faltan = dia >= hoy ? dia - hoy : (31 - hoy) + dia;
-      if (faltan <= dias) {
-        alertas.push(`🏦 <b>${l['Nombre']}</b>: cuota vence en ${faltan} día(s) (día ${dia}). Cuota: $${(parseFloat(l['Cuota ($)'])||0).toLocaleString('es-AR')}`);
+    const cuotas = _leerHoja(ss, 'Cuotas Préstamos');
+    const hoyDate = new Date(); hoyDate.setHours(0,0,0,0);
+    cuotas.forEach(c => {
+      if (c['Pagada'] === 'SI') return;
+      const fecha = _fechaAISO(c['Fecha vencimiento']);
+      if (!fecha) return;
+      const faltan = Math.ceil((new Date(fecha) - hoyDate) / (1000*60*60*24));
+      const monto = parseFloat(c['Monto ($)']) || 0;
+      if (faltan < 0) {
+        alertas.push(`🏦 <b>${c['Préstamo']}</b>: cuota ${c['N° Cuota']} vencida hace ${Math.abs(faltan)} día(s) sin pagar. $${monto.toLocaleString('es-AR')}`);
+      } else if (faltan <= dias) {
+        alertas.push(`🏦 <b>${c['Préstamo']}</b>: cuota ${c['N° Cuota']} vence en ${faltan} día(s). $${monto.toLocaleString('es-AR')}`);
       }
     });
   }
