@@ -108,12 +108,22 @@ function _hojaAPrestamos(ss) {
     const name = r['Nombre'];
     const installments = cuotasRows
       .filter(c => c['Préstamo'] === name)
-      .map(c => ({
-        numero: parseInt(c['N° Cuota']) || 0,
-        monto: parseFloat(c['Monto ($)']) || 0,
-        fecha: _fechaAISO(c['Fecha vencimiento']),
-        pagada: c['Pagada'] === 'SI'
-      }))
+      .map(c => {
+        const inst = {
+          numero: parseInt(c['N° Cuota']) || 0,
+          monto: parseFloat(c['Monto ($)']) || 0,
+          fecha: _fechaAISO(c['Fecha vencimiento']),
+          pagada: c['Pagada'] === 'SI'
+        };
+        // Si hay desglose de capital/interés guardado, lo reconstruye
+        const capitalStr = c['Capital ($)'];
+        const interesStr = c['Interés ($)'];
+        if (capitalStr !== '' && capitalStr !== undefined && interesStr !== '' && interesStr !== undefined) {
+          inst.capital = parseFloat(capitalStr) || 0;
+          inst.interes = parseFloat(interesStr) || 0;
+        }
+        return inst;
+      })
       .sort((a,b) => a.numero - b.numero);
 
     return {

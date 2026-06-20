@@ -495,12 +495,12 @@
     <input type="hidden" id="lm-id">
     <div class="form-group"><label>Nombre del préstamo</label><input id="lm-name" type="text" placeholder="Ej: Préstamo Galicia, Cuota auto..."></div>
     <div class="form-row">
-      <div class="form-group"><label>Monto total ($)</label><input id="lm-total" type="number" inputmode="decimal" placeholder="0"></div>
+      <div class="form-group"><label>Monto total ($)</label><input id="lm-total" type="text" inputmode="decimal" placeholder="0,00"></div>
       <div class="form-group"><label>Cantidad de cuotas</label><input id="lm-cuotas" type="number" inputmode="numeric" min="1" placeholder="Ej: 24"></div>
     </div>
     <div class="form-row">
-      <div class="form-group"><label>Monto por cuota ($)</label><input id="lm-cuota" type="number" inputmode="decimal" placeholder="0"></div>
-      <div class="form-group"><label>Tasa mensual (%)</label><input id="lm-tasa" type="number" inputmode="decimal" placeholder="0" step="0.1"></div>
+      <div class="form-group"><label>Monto por cuota ($)</label><input id="lm-cuota" type="text" inputmode="decimal" placeholder="0,00"></div>
+      <div class="form-group"><label>Tasa mensual (%)</label><input id="lm-tasa" type="text" inputmode="decimal" placeholder="0"></div>
     </div>
     <div class="form-row">
       <div class="form-group"><label>Fecha 1ª cuota</label><input id="lm-fecha-inicio" type="date"></div>
@@ -532,12 +532,23 @@
     <div class="modal-title">Editar cuota</div>
     <input type="hidden" id="im-loan-id">
     <input type="hidden" id="im-index">
-    <div class="form-group"><label>Monto de la cuota ($)</label><input id="im-amount" type="number" inputmode="decimal" placeholder="0"></div>
+    <div class="form-group"><label>Monto de la cuota ($)</label><input id="im-amount" type="text" inputmode="decimal" placeholder="0,00" oninput="syncInstallmentTotal()"></div>
     <div class="form-group"><label>Fecha de vencimiento</label><input id="im-date" type="date"></div>
+
+    <div class="tag-row" style="margin:14px 0 8px;cursor:pointer" onclick="toggleBreakdown()">
+      <span style="font-size:13px;font-weight:500;color:var(--text-muted)"><i class="ti ti-chevron-down" id="breakdown-chevron"></i> Desglosar capital e interés (opcional)</span>
+    </div>
+    <div id="breakdown-fields" style="display:none">
+      <div class="form-row">
+        <div class="form-group"><label>Capital ($)</label><input id="im-capital" type="text" inputmode="decimal" placeholder="0,00" oninput="syncInstallmentTotal()"></div>
+        <div class="form-group"><label>Interés ($)</label><input id="im-interes" type="text" inputmode="decimal" placeholder="0,00" oninput="syncInstallmentTotal()"></div>
+      </div>
+      <p style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Si completás estos dos campos, el monto total de la cuota se calcula solo (capital + interés).</p>
+    </div>
+
     <button class="btn primary" style="margin-bottom:8px" onclick="saveInstallmentEdit()"><i class="ti ti-check"></i> Guardar cambios</button>
     <button class="btn" onclick="closeInstallmentModal()">Cancelar</button>
   </div>
-</div>
 </div>
 
 <!-- Modal Datos / Drive -->
@@ -603,7 +614,28 @@ function persist() {
 }
 
 // ─── UTILS ───────────────────────────────────────────────────────────────────
-const fmt = n => '$' + Math.round(n).toLocaleString('es-AR');
+// Convierte cualquier input numérico con coma o punto decimal a un Number preciso.
+// Acepta: "1234.56", "1234,56", "1.234,56" (miles con punto, decimal con coma), "1,234.56" (formato US)
+function parseDecimal(str) {
+  if (str === null || str === undefined || str === '') return NaN;
+  str = String(str).trim();
+  const hasComma = str.includes(',');
+  const hasDot = str.includes('.');
+  if (hasComma && hasDot) {
+    // El símbolo que aparece último es el separador decimal real
+    if (str.lastIndexOf(',') > str.lastIndexOf('.')) {
+      str = str.replace(/\./g, '').replace(',', '.'); // 1.234,56 → 1234.56
+    } else {
+      str = str.replace(/,/g, ''); // 1,234.56 → 1234.56
+    }
+  } else if (hasComma) {
+    str = str.replace(',', '.'); // 1234,56 → 1234.56
+  }
+  const n = parseFloat(str);
+  return isNaN(n) ? NaN : n;
+}
+
+const fmt = n => '$' + (Math.round(n * 100) / 100).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const curMonth = () => new Date().toISOString().slice(0, 7);
 const monthTxs = m => txs.filter(t => t.date.startsWith(m));
 function monthStats(m) {
@@ -1813,12 +1845,12 @@ function closeLoanModal() { document.getElementById('loan-modal').classList.remo
 function saveLoan() {
   const id = document.getElementById('lm-id').value;
   const name = document.getElementById('lm-name').value.trim();
-  const total = parseFloat(document.getElementById('lm-total').value) || 0;
+  const total = parseDecimal(document.getElementById('lm-total').value) || 0;
   const numCuotas = parseInt(document.getElementById('lm-cuotas').value);
-  const montoCuota = parseFloat(document.getElementById('lm-cuota').value);
+  const montoCuota = parseDecimal(document.getElementById('lm-cuota').value);
   const fechaInicio = document.getElementById('lm-fecha-inicio').value;
   const dia = parseInt(document.getElementById('lm-dia').value) || null;
-  const tasa = parseFloat(document.getElementById('lm-tasa').value) || 0;
+  const tasa = parseDecimal(document.getElementById('lm-tasa').value) || 0;
 
   if (!name) { toast('⚠️ Ingresá el nombre del préstamo'); return; }
   if (!numCuotas || numCuotas <= 0 || isNaN(numCuotas)) { toast('⚠️ Ingresá la cantidad de cuotas (un número mayor a 0)'); return; }
@@ -1877,12 +1909,14 @@ function openScheduleModal(loanId) {
   }
   document.getElementById('schedule-list').innerHTML = insts.map((c, i) => {
     const vencida = !c.pagada && new Date(c.fecha) < new Date(new Date().toDateString());
+    const hasBreakdown = c.capital !== undefined && c.interes !== undefined;
     return `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:0.5px solid var(--border)">
       <div style="display:flex;align-items:center;gap:10px">
         <input type="checkbox" ${c.pagada ? 'checked' : ''} onchange="toggleInstallmentPaid('${loanId}', ${i})" style="width:20px;height:20px;cursor:pointer">
         <div>
           <div style="font-size:14px;font-weight:500;${c.pagada ? 'text-decoration:line-through;opacity:.5' : ''}">Cuota ${c.numero} — ${fmt(c.monto)}</div>
           <div style="font-size:12px;color:${vencida ? 'var(--red)' : 'var(--text-muted)'}">${c.fecha.slice(8,10)}/${c.fecha.slice(5,7)}/${c.fecha.slice(0,4)} ${vencida ? '· VENCIDA' : ''}</div>
+          ${hasBreakdown ? `<div style="font-size:11px;color:var(--text-muted);margin-top:2px">Capital: ${fmt(c.capital)} · Interés: ${fmt(c.interes)}</div>` : ''}
         </div>
       </div>
       <button class="delete-btn" onclick="openInstallmentEdit('${loanId}', ${i})" title="Editar esta cuota"><i class="ti ti-edit"></i></button>
@@ -1911,23 +1945,76 @@ function openInstallmentEdit(loanId, index) {
   const c = l.installments[index];
   document.getElementById('im-loan-id').value = loanId;
   document.getElementById('im-index').value = index;
-  document.getElementById('im-amount').value = c.monto;
+  document.getElementById('im-amount').value = formatDecimalInput(c.monto);
   document.getElementById('im-date').value = c.fecha;
+
+  // Si la cuota ya tiene desglose guardado, mostrarlo y precargarlo
+  const hasBreakdown = c.capital !== undefined && c.interes !== undefined;
+  document.getElementById('im-capital').value = hasBreakdown ? formatDecimalInput(c.capital) : '';
+  document.getElementById('im-interes').value = hasBreakdown ? formatDecimalInput(c.interes) : '';
+  document.getElementById('breakdown-fields').style.display = hasBreakdown ? 'block' : 'none';
+  document.getElementById('breakdown-chevron').className = hasBreakdown ? 'ti ti-chevron-up' : 'ti ti-chevron-down';
+
   document.getElementById('installment-modal').classList.add('open');
 }
 
 function closeInstallmentModal() { document.getElementById('installment-modal').classList.remove('open'); }
 
+function toggleBreakdown() {
+  const el = document.getElementById('breakdown-fields');
+  const isOpen = el.style.display !== 'none';
+  el.style.display = isOpen ? 'none' : 'block';
+  document.getElementById('breakdown-chevron').className = isOpen ? 'ti ti-chevron-down' : 'ti ti-chevron-up';
+}
+
+// Si capital e interés están completos, el monto total de la cuota se recalcula solo
+function syncInstallmentTotal() {
+  const capitalStr = document.getElementById('im-capital').value;
+  const interesStr = document.getElementById('im-interes').value;
+  if (capitalStr === '' || interesStr === '') return; // falta completar alguno, no tocar el total
+  const capital = parseDecimal(capitalStr);
+  const interes = parseDecimal(interesStr);
+  if (isNaN(capital) || isNaN(interes)) return;
+  document.getElementById('im-amount').value = formatDecimalInput(capital + interes);
+}
+
+// Formatea un número para mostrarlo en un input de texto, con coma decimal y sin redondear de más
+function formatDecimalInput(n) {
+  if (n === null || n === undefined || isNaN(n)) return '';
+  return (Math.round(n * 100) / 100).toString().replace('.', ',');
+}
+
 function saveInstallmentEdit() {
   const loanId = document.getElementById('im-loan-id').value;
   const index = parseInt(document.getElementById('im-index').value);
-  const monto = parseFloat(document.getElementById('im-amount').value);
   const fecha = document.getElementById('im-date').value;
-  if (!monto || !fecha) { toast('⚠️ Completá monto y fecha'); return; }
+
+  const capitalStr = document.getElementById('im-capital').value;
+  const interesStr = document.getElementById('im-interes').value;
+  const hasBreakdown = capitalStr !== '' && interesStr !== '';
+
+  let monto, capital, interes;
+  if (hasBreakdown) {
+    capital = parseDecimal(capitalStr);
+    interes = parseDecimal(interesStr);
+    if (isNaN(capital) || isNaN(interes)) { toast('⚠️ Capital e interés deben ser números válidos'); return; }
+    monto = capital + interes;
+  } else {
+    monto = parseDecimal(document.getElementById('im-amount').value);
+  }
+
+  if (!monto || isNaN(monto) || monto <= 0) { toast('⚠️ Completá el monto de la cuota'); return; }
+  if (!fecha) { toast('⚠️ Completá la fecha de vencimiento'); return; }
 
   loans = loans.map(l => {
     if (l.id !== loanId) return l;
-    const installments = l.installments.map((c, i) => i === index ? { ...c, monto, fecha } : c);
+    const installments = l.installments.map((c, i) => {
+      if (i !== index) return c;
+      const updated = { ...c, monto, fecha };
+      if (hasBreakdown) { updated.capital = capital; updated.interes = interes; }
+      else { delete updated.capital; delete updated.interes; }
+      return updated;
+    });
     return recalcLoanTotals({ ...l, installments });
   });
   persist();

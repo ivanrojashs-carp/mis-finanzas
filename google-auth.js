@@ -77,9 +77,9 @@ window.gAuth = (() => {
         return [l.name, l.total||'', l.saldo||0, l.vencido||0, insts.length, pagadas, l.tasa||''];
       })];
 
-    const cuotasRows = [['Préstamo','N° Cuota','Monto ($)','Fecha vencimiento','Pagada']];
+    const cuotasRows = [['Préstamo','N° Cuota','Monto ($)','Capital ($)','Interés ($)','Fecha vencimiento','Pagada']];
     loans.forEach(l => (l.installments || []).forEach(c => {
-      cuotasRows.push([l.name, c.numero, c.monto, c.fecha, c.pagada ? 'SI' : 'NO']);
+      cuotasRows.push([l.name, c.numero, c.monto, c.capital ?? '', c.interes ?? '', c.fecha, c.pagada ? 'SI' : 'NO']);
     }));
 
     const cfgRows = [['Clave','Valor'],
