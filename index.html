@@ -175,7 +175,10 @@
         <div id="pie-legend" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;font-size:12px;color:var(--text-muted)"></div>
       </div>
       <div class="card">
-        <div class="card-title">Últimos movimientos</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <div class="card-title" style="margin-bottom:0">Últimos movimientos</div>
+          <button class="btn sm" onclick="goto('history')"><i class="ti ti-list"></i> Ver historial completo</button>
+        </div>
         <div id="d-recent"></div>
       </div>
     </div>
@@ -625,7 +628,8 @@ function goto(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.navbar button').forEach(b => b.classList.remove('active'));
   document.getElementById('s-' + id).classList.add('active');
-  document.getElementById('nav-' + id).classList.add('active');
+  const navBtn = document.getElementById('nav-' + id);
+  if (navBtn) navBtn.classList.add('active'); // history no tiene botón propio en el navbar
   if (id === 'dashboard') renderDashboard();
   if (id === 'add' && !editingTxId) resetAddForm(); // entrada "limpia" desde el navbar, no desde editTx
   if (id === 'cards') renderCards();
@@ -634,6 +638,7 @@ function goto(id) {
   if (id === 'budget') renderBudget();
   if (id === 'analysis') renderAnalysis();
   if (id === 'settings') renderSettings();
+  if (id === 'history') renderHistory();
   if (id !== 'add') editingTxId = null; // salir de "Agregar" sin guardar cancela la edición
 }
 
@@ -2013,11 +2018,14 @@ function togglePeriod(m) {
 }
 
 function filterHistoryByMonth(m) {
-  // Navegar a historial con ese mes seleccionado
-  goto('dashboard'); // primero dashboard para evitar estado roto
-  // Abrir historial con el mes correcto — implementado vía historial en pantalla de análisis
-  // Por simplicidad, mostramos un toast con instrucción
-  toast(`Filtrá por ${m.slice(5,7)}/${m.slice(0,4)} en la pantalla Historial`);
+  // Navega a Historial y aplica automáticamente el filtro de fechas para ese mes completo
+  goto('history');
+  const [y, mo] = m.split('-');
+  const lastDay = new Date(+y, +mo, 0).getDate(); // último día de ese mes
+  document.getElementById('h-date-from').value = `${m}-01`;
+  document.getElementById('h-date-to').value = `${m}-${String(lastDay).padStart(2,'0')}`;
+  document.getElementById('history-filters').style.display = 'block'; // mostrar el panel de filtros ya aplicado
+  renderHistory();
 }
 
 // ─── BORRAR DATOS ─────────────────────────────────────────────────────────────
