@@ -169,6 +169,13 @@
         <div class="metric"><div class="metric-label">% gastado</div><div class="metric-value" id="d-rate">—</div></div>
       </div>
       <div id="d-alerts"></div>
+
+      <div style="display:flex;gap:8px;margin-bottom:14px;overflow-x:auto;padding-bottom:2px">
+        <button class="btn sm" style="white-space:nowrap" onclick="goto('budget')"><i class="ti ti-target"></i> Presupuestos</button>
+        <button class="btn sm" style="white-space:nowrap" onclick="goto('history')"><i class="ti ti-list"></i> Historial</button>
+        <button class="btn sm" style="white-space:nowrap" onclick="goto('analysis')"><i class="ti ti-chart-pie"></i> Análisis</button>
+      </div>
+
       <div class="card">
         <div class="card-title">Gastos este mes</div>
         <div style="position:relative;height:190px"><canvas id="pie-chart" role="img" aria-label="Gastos por categoría del mes actual">Sin datos.</canvas></div>
@@ -177,7 +184,7 @@
       <div class="card">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
           <div class="card-title" style="margin-bottom:0">Últimos movimientos</div>
-          <button class="btn sm" onclick="goto('history')"><i class="ti ti-list"></i> Ver historial completo</button>
+          <button class="btn sm" onclick="goto('history')"><i class="ti ti-list"></i> Ver todos</button>
         </div>
         <div id="d-recent"></div>
       </div>
@@ -1162,7 +1169,10 @@ let _pendingChanges = false;
 
 function scheduleAutoSync() {
   _pendingChanges = true;
-  if (!window.gAuth || !window.gAuth.isSignedIn()) return; // sin Apps Script configurado, no hace nada
+  // No dispara nada si todavía no se completó la sincronización inicial de este
+  // dispositivo (ver saveGasConfig) — evita que un dispositivo recién conectado
+  // suba datos vacíos/demo antes de que el usuario decida bajar lo existente.
+  if (!window.gAuth || !window.gAuth.isSignedIn() || !localStorage.getItem('mf_initial_sync_done')) return;
   clearTimeout(_autoSyncTimer);
   _autoSyncTimer = setTimeout(runAutoSync, AUTO_SYNC_DEBOUNCE_MS);
 }
@@ -1170,7 +1180,7 @@ function scheduleAutoSync() {
 function startAutoSyncInterval() {
   clearInterval(_autoSyncInterval);
   _autoSyncInterval = setInterval(() => {
-    if (window.gAuth && window.gAuth.isSignedIn() && _pendingChanges) runAutoSync();
+    if (window.gAuth && window.gAuth.isSignedIn() && _pendingChanges && localStorage.getItem('mf_initial_sync_done')) runAutoSync();
   }, AUTO_SYNC_INTERVAL_MS);
 }
 
@@ -1232,6 +1242,7 @@ async function doSyncToSheets() {
   try {
     const url = await window.gAuth.syncToSheets(txs, budgets, cards, loans, alertConfig);
     localStorage.setItem('mf_last_export', new Date().toISOString());
+    localStorage.setItem('mf_initial_sync_done', 'true');
     _pendingChanges = false;
     updateSyncBtn();
     closeDrive();
@@ -1261,6 +1272,7 @@ async function doImportFromSheets() {
     if (data.cards && data.cards.length) cards = data.cards;
     if (data.loans && data.loans.length) loans = data.loans;
     persist();
+    localStorage.setItem('mf_initial_sync_done', 'true');
     renderDashboard();
     closeDrive();
     toast(`✓ ${n} movimientos importados desde Sheets`);
@@ -1271,16 +1283,40 @@ async function doImportFromSheets() {
   btn.innerHTML = '<i class="ti ti-cloud-download"></i> Bajar datos desde Google Sheets';
 }
 
-function saveGasConfig() {
+async function saveGasConfig() {
   const url = document.getElementById('gas-url').value.trim();
   const secret = document.getElementById('gas-secret').value.trim();
   if (!url || !secret) { toast('⚠️ Completá la URL y la clave'); return; }
   if (!url.includes('script.google.com')) { toast('⚠️ La URL no parece ser de Apps Script'); return; }
+
   localStorage.setItem('mf_gas_config', JSON.stringify({ url, secret, label: 'Apps Script conectado' }));
   updateSyncBtn();
+
+  // CRÍTICO: antes de activar el auto-sync (que sube datos), preguntamos si
+  // este dispositivo debería bajar lo que ya existe en el Sheet. Si no
+  // preguntamos esto, un dispositivo nuevo con datos vacíos podría
+  // sobreescribir el Sheet con la nada antes de que el usuario llegue a
+  // bajar manualmente.
+  toast('Conectado. Revisando si hay datos existentes en el Sheet...');
+  try {
+    const data = await window.gAuth.importFromSheets();
+    const n = (data.transactions || []).length;
+    if (n > 0 && confirm(`Tu Google Sheet ya tiene ${n} movimiento(s) cargado(s) desde otro dispositivo.\n\n¿Querés traerlos a este dispositivo ahora? (Recomendado la primera vez que conectás un dispositivo nuevo)`)) {
+      txs = data.transactions || [];
+      budgets = data.budgets || {};
+      if (data.cards && data.cards.length) cards = data.cards;
+      if (data.loans && data.loans.length) loans = data.loans;
+      persist();
+      renderDashboard();
+      toast(`✓ ${n} movimientos importados desde tu Sheet`);
+    }
+  } catch(e) {
+    console.warn('No se pudo verificar datos existentes en el Sheet:', e.message);
+  }
+
+  localStorage.setItem('mf_initial_sync_done', 'true'); // a partir de ahora, el auto-sync puede subir libremente
   startAutoSyncInterval();
   handleSync(); // refresca el modal con el estado conectado
-  toast('✓ Conectado con Google Sheets — sync automático activado');
 }
 
 function closeDrive() { document.getElementById('drive-overlay').classList.remove('open'); }
@@ -1339,6 +1375,33 @@ function exportXLSX() {
   const wsCat = XLSX.utils.aoa_to_sheet(catRows);
   wsCat['!cols'] = [{wch:18},{wch:18},{wch:14},{wch:16},{wch:16}];
   XLSX.utils.book_append_sheet(wb, wsCat, 'Categorías (mes actual)');
+
+  // Hoja 5: Tarjetas de crédito
+  const cRows = [['Nombre','Saldo ($)','Límite ($)','Día cierre','Día vencimiento','Pago mín %']];
+  cards.forEach(c => cRows.push([c.name, c.saldo, c.limite||'', c.cierre||'', c.venc||'', c.minpct||'']));
+  const wsCards = XLSX.utils.aoa_to_sheet(cRows);
+  wsCards['!cols'] = [{wch:20},{wch:14},{wch:14},{wch:12},{wch:16},{wch:12}];
+  XLSX.utils.book_append_sheet(wb, wsCards, 'Tarjetas');
+
+  // Hoja 6: Préstamos (resumen)
+  const lRows = [['Nombre','Total ($)','Saldo restante ($)','Vencido sin pagar ($)','Cant. cuotas','Cuotas pagadas','Tasa %']];
+  loans.forEach(l => {
+    const insts = l.installments || [];
+    const pagadas = insts.filter(c => c.pagada).length;
+    lRows.push([l.name, l.total||'', l.saldo||0, l.vencido||0, insts.length, pagadas, l.tasa||'']);
+  });
+  const wsLoans = XLSX.utils.aoa_to_sheet(lRows);
+  wsLoans['!cols'] = [{wch:20},{wch:14},{wch:16},{wch:18},{wch:12},{wch:14},{wch:10}];
+  XLSX.utils.book_append_sheet(wb, wsLoans, 'Préstamos');
+
+  // Hoja 7: Cuotas de Préstamos (detalle, una fila por cuota)
+  const cuotasRows = [['Préstamo','N° Cuota','Monto ($)','Capital ($)','Interés ($)','Fecha vencimiento','Pagada']];
+  loans.forEach(l => (l.installments || []).forEach(c => {
+    cuotasRows.push([l.name, c.numero, c.monto, c.capital ?? '', c.interes ?? '', c.fecha, c.pagada ? 'SI' : 'NO']);
+  }));
+  const wsCuotas = XLSX.utils.aoa_to_sheet(cuotasRows);
+  wsCuotas['!cols'] = [{wch:20},{wch:10},{wch:14},{wch:14},{wch:14},{wch:18},{wch:10}];
+  XLSX.utils.book_append_sheet(wb, wsCuotas, 'Cuotas Préstamos');
 
   const fecha = new Date().toISOString().slice(0,10);
   XLSX.writeFile(wb, `mis-finanzas-${fecha}.xlsx`);
@@ -1442,7 +1505,17 @@ function _importXLSX(file) {
         const typeRaw = col.type >= 0 ? String(r[col.type]).toLowerCase().trim() : 'expense';
         const desc    = col.desc >= 0 ? String(r[col.desc]).trim() : 'Sin descripción';
         const cat     = col.cat >= 0  ? String(r[col.cat]).trim()  : 'Otros';
-        const amount  = col.amount >= 0 ? parseFloat(String(r[col.amount]).replace(/[^0-9.-]/g,'')) : 0;
+        const amountRaw = col.amount >= 0 ? r[col.amount] : 0;
+        // Si la celda ya es un número (caso normal en Excel/Sheets), se usa directo.
+        // Si es texto con formato "$ 1.234,56" o similar, se limpia el símbolo de moneda
+        // y separadores de miles antes de parsear con parseDecimal (soporta coma o punto).
+        let amount;
+        if (typeof amountRaw === 'number') {
+          amount = amountRaw;
+        } else {
+          const cleaned = String(amountRaw).replace(/[^0-9.,\-]/g, '');
+          amount = parseDecimal(cleaned);
+        }
         const note    = col.note >= 0  ? String(r[col.note]).trim() : '';
 
         if (!dateRaw || isNaN(amount) || amount <= 0) continue;
@@ -2292,7 +2365,12 @@ migrateOldLoans(); // convierte préstamos de versiones anteriores al nuevo form
 renderDashboard();
 updateAlertBadges();
 updateSyncBtn();
-if (window.gAuth && window.gAuth.isSignedIn()) startAutoSyncInterval();
+if (window.gAuth && window.gAuth.isSignedIn()) {
+  // Si ya estaba conectado desde una versión anterior (antes de este fix de seguridad),
+  // asumimos que el usuario ya pasó por un sync consciente alguna vez — no lo bloqueamos.
+  if (!localStorage.getItem('mf_initial_sync_done')) localStorage.setItem('mf_initial_sync_done', 'true');
+  startAutoSyncInterval();
+}
 
 // ─── SERVICE WORKER + DETECCIÓN DE ACTUALIZACIONES ───────────────────────────
 let _newWorker = null;

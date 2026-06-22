@@ -39,7 +39,7 @@ window.gAuth = (() => {
   function isSignedIn()  { return !!(_cfg && _cfg.url && _cfg.secret); }
   function getEmail()    { return _cfg ? (_cfg.label || 'Apps Script configurado') : ''; }
   function signIn()      { window.openGasSetup && window.openGasSetup(); }
-  function signOut()     { localStorage.removeItem(GAS_CONFIG_KEY); _cfg = null; window.updateSyncBtn && window.updateSyncBtn(); }
+  function signOut()     { localStorage.removeItem(GAS_CONFIG_KEY); localStorage.removeItem('mf_initial_sync_done'); _cfg = null; window.updateSyncBtn && window.updateSyncBtn(); }
 
   async function syncToSheets(txs, budgets, cards = [], loans = [], alertConfig = {}) {
     if (!isSignedIn()) throw new Error('Configurá la URL del Apps Script primero');
