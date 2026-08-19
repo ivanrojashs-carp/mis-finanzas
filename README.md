@@ -1,6 +1,25 @@
-# 💰 Mis Finanzas — PWA con sync a Google Sheets
+# 💰 Mis Finanzas — PWA con sincronización multi-dispositivo
 
-App de finanzas personales instalable en Android (y también usable en la PC), con sincronización a tu propio Google Sheet vía Apps Script — **sin Google Cloud, sin tarjeta de crédito, sin OAuth**.
+App de finanzas personales instalable en Android (y usable en la PC), con **sincronización por fusión** a tu propio Google Sheet vía Apps Script — **sin Google Cloud, sin tarjeta de crédito, sin OAuth**.
+
+---
+
+## ✨ Qué hay de nuevo en esta versión (v18)
+
+**Rediseño visual Material Design:**
+- Nuevo color de acento azul índigo, superficies con efecto vidrio esmerilado y transparencias.
+- **Modo claro / oscuro / automático** (seguí el sistema o forzá uno) desde Config → Apariencia.
+- Tarjetas con elevación, botones con capa de estado y animaciones suaves.
+
+**Motor de sincronización por fusión (desde v17):**
+
+- Cada movimiento, tarjeta y préstamo tiene una marca de tiempo propia (`updatedAt`).
+- Al sincronizar, los datos se **combinan** en vez de reemplazarse: si cargaste algo en el celu y algo distinto en la PC, **se conservan los dos**.
+- Los borrados se propagan correctamente (si borrás algo en un dispositivo, se borra en todos).
+- La app **baja los cambios de otros dispositivos cada 30 segundos** automáticamente, mientras está abierta.
+- Si el mismo registro se edita en dos dispositivos a la vez, la app **te avisa y elegís** con cuál quedarte (no se pierde nada silenciosamente).
+
+**Ya no hay botones separados de "Subir" y "Bajar".** Hay un único botón "Sincronizar ahora", y en general ni siquiera hace falta tocarlo: todo pasa solo.
 
 ---
 
@@ -10,133 +29,86 @@ App de finanzas personales instalable en Android (y también usable en la PC), c
 index.html       ← la app completa
 manifest.json    ← la hace instalable
 sw.js            ← funciona offline
-google-auth.js   ← módulo de sync (apunta a tu Apps Script)
+sync-engine.js   ← NUEVO: motor de fusión (timestamps, tombstones, conflictos)
+google-auth.js   ← comunicación con tu Apps Script
 apps-script.gs   ← código para pegar en tu Google Sheet
 icons/           ← íconos
 ```
 
----
-
-## 🚀 PARTE 1 — Subir la app a GitHub Pages
-
-1. Entrá a tu repositorio en GitHub
-2. **Add file → Upload files** → arrastrá: `index.html`, `manifest.json`, `sw.js`, `google-auth.js`, carpeta `icons/`
-   > `apps-script.gs` **no va a GitHub** — ese va dentro de tu Google Sheet (Parte 2)
-3. Commit changes
-4. Esperá 1-2 minutos y entrá a `https://TU-USUARIO.github.io/TU-REPO`
+> ⚠️ **Importante:** esta versión suma un archivo nuevo, `sync-engine.js`. Cuando actualices en GitHub, asegurate de subirlo junto con los demás.
 
 ---
 
-## 🔧 PARTE 2 — Configurar Google Sheets (10 minutos, una sola vez)
+## 🚀 PARTE 1 — Subir/actualizar la app en GitHub Pages
 
-### Paso 1 — Crear el Sheet
-1. Ve a [sheets.google.com](https://sheets.google.com) → **Hoja de cálculo en blanco**
-2. Ponele de nombre: `Mis Finanzas Personales`
+1. Entrá a tu repositorio en GitHub.
+2. **Add file → Upload files** → arrastrá estos archivos (reemplazan los viejos):
+   - `index.html`
+   - `sync-engine.js`  ← **archivo nuevo, no lo olvides**
+   - `google-auth.js`
+   - `sw.js`
+   - `manifest.json`
+   > `apps-script.gs` **no va a GitHub** — ese va dentro de tu Google Sheet (Parte 2).
+3. **Commit changes.**
+4. Esperá 1-2 minutos.
 
-### Paso 2 — Pegar el script
-1. En el Sheet: menú **Extensiones → Apps Script**
-2. Se abre un editor con código de ejemplo (`function myFunction() {}`) — **borralo todo**
-3. Abrí el archivo `apps-script.gs` (el que descargaste en el ZIP), copiá todo su contenido y pegalo en el editor
-4. Buscá esta línea cerca del principio:
+Como cambió el número de versión del Service Worker (a `v17`), la app te va a mostrar el cartel **"Hay una actualización disponible"** la próxima vez que la abras. Tocá recargar. Si no aparece, entrá a la configuración del sitio en Chrome y usá "Actualizar" o, en el peor caso, "Eliminar datos del sitio" y reinstalá (tus datos están a salvo en el Sheet).
+
+---
+
+## 🔧 PARTE 2 — Actualizar el Apps Script (¡obligatorio en esta versión!)
+
+El código del servidor cambió por completo: ahora fusiona en vez de pisar, y usa hojas nuevas en tu Sheet. **Tenés que actualizar el script sí o sí**, o la sincronización no va a funcionar.
+
+1. Abrí tu proyecto en `script.google.com` (o desde tu Sheet: **Extensiones → Apps Script**).
+2. **Borrá todo** el código viejo y pegá el contenido completo de `apps-script.gs`.
+3. Configurá las dos líneas de arriba:
    ```javascript
-   const SECRET = 'TU_CLAVE_SECRETA';
+   const SECRET   = 'TU_CLAVE_SECRETA';   // ← poné tu clave (la misma que usás en la app)
+   const SHEET_ID = '...';                // ← ya viene con tu ID cargado
    ```
-   Cambiala por una contraseña que inventes vos, por ejemplo:
-   ```javascript
-   const SECRET = 'Finanzas2024Seguro!';
-   ```
-5. Arriba a la izquierda, ponele un nombre al proyecto (ej: "Mis Finanzas API")
-6. Guardar (ícono de disquete o `Ctrl+S`)
+   > La **clave secreta** es una palabra que inventás vos. **No es tu contraseña de Google.** Tiene que ser idéntica acá y en la app.
+4. **Guardá** (Ctrl+S).
+5. **Implementar → Administrar implementaciones → (ícono lápiz) Editar → Versión: Nueva versión → Implementar.**
+   > Hacelo así (editando la implementación existente) para que **la URL no cambie**. Si creás una implementación nueva desde cero, te da otra URL y tendrías que volver a pegarla en la app.
 
-### Paso 3 — Publicar como Web App
-1. Arriba a la derecha: botón **Implementar → Nueva implementación**
-2. Click en el ícono de engranaje ⚙️ junto a "Seleccionar tipo" → elegí **Aplicación web**
-3. Completá:
-   - Descripción: "Mis Finanzas Sync" (lo que quieras)
-   - Ejecutar como: **Yo (tu cuenta)**
-   - Quién tiene acceso: **Cualquier persona**
-4. Click **Implementar**
-5. Te va a pedir **Autorizar acceso** → elegí tu cuenta → puede aparecer un aviso de "Google no verificó esta app" → click en **Configuración avanzada** → **Ir a Mis Finanzas API (no seguro)** → **Permitir**
-   > Esto es normal y seguro: es tu propio script, en tu propia cuenta. El aviso aparece porque no lo publicaste en la tienda de Google, no porque sea inseguro.
-6. Copiá la **URL de la aplicación web** que te muestra (termina en `/exec`)
+### Sobre las hojas del Sheet
 
-### Paso 4 — Conectar la app con el Sheet
-1. Abrí tu PWA (instalada o en el navegador)
-2. Tocá el botón **"Datos"** arriba a la derecha
-3. Tocá **"Configurar Apps Script"** (o el botón equivalente de conexión)
-4. Pegá:
-   - **URL**: la que copiaste en el paso anterior
-   - **Clave secreta**: la misma que pusiste en `SECRET`
-5. Guardar → Sincronizar
+El nuevo motor crea hojas nuevas automáticamente: **`Transacciones`, `Tarjetas`, `Prestamos`, `_Settings`** (con columnas internas `id`, `updatedAt`, `deleted`). También mantiene una hoja legible **`Resumen mensual`**.
 
-Si todo salió bien, vas a ver en tu Google Sheet 6 pestañas creadas automáticamente: Transacciones, Presupuestos, Resumen mensual, Tarjetas, Préstamos y Config.
-
-### Paso 5 — Activar las alertas por email automáticas (opcional)
-1. En la app: **Configuración → Alertas por email** → completá tu email y tildá qué querés que te avise
-2. Sincronizá de nuevo (botón Datos → Sincronizar) para que esa config llegue al Sheet
-3. Volvé al editor de Apps Script (Extensiones → Apps Script)
-4. Ícono de **reloj ⏰** en el menú izquierdo (Activadores)
-5. **+ Agregar activador** (abajo a la derecha)
-6. Configurá:
-   - Función a ejecutar: **enviarAlertasDiarias**
-   - Fuente del evento: **Basado en tiempo**
-   - Tipo de activador: **Temporizador diario**
-   - Horario: el que prefieras (ej: 8 a 9 AM)
-7. Guardar → te pide autorizar de nuevo, aceptá
-
-Listo. A partir de ahora, todos los días a esa hora, el script revisa tus datos y te manda un email si hay vencimientos cerca, presupuestos excedidos o déficit mensual.
+Las hojas del formato viejo quedan obsoletas y podés ignorarlas o borrarlas. La primera vez que sincronices desde el dispositivo que tiene tus datos buenos, esas hojas nuevas se van a poblar solas.
 
 ---
 
-## 📱💻 ¿Funciona igual en el celular y en la PC con los mismos datos?
+## 📲 PARTE 3 — Conectar cada dispositivo
 
-**Importante entender esto:** la app guarda los datos **localmente en cada dispositivo** (en el teléfono, en el navegador de la PC, etc.) — no hay una base de datos central que los una automáticamente.
+En cada dispositivo (celular y PC):
 
-**Lo que el Google Sheet te da es un punto de encuentro manual:**
+1. Abrí la app → botón **Datos** (o Config → sincronización).
+2. Pegá la **URL del Apps Script** (`.../exec`) y tu **clave secreta**.
+3. Tocá **Conectar**.
 
-- Desde el **celular**: cargás movimientos → tocás "Sincronizar" → se escriben en el Sheet
-- Desde la **PC**: abrís la misma URL en Chrome → tocás "Configurar Apps Script" con la misma URL y clave → pero acá necesitás **importar** los datos del Sheet a ese dispositivo
+La primera vez, la app trae lo que ya está en el Sheet y lo fusiona con lo que tengas en ese dispositivo. A partir de ahí, todo se sincroniza solo.
 
-**Lo que falta para que sea 100% automático en ambos sentidos (no solo exportar) es agregar una función de "Importar desde Sheets"**, simétrica a la de sincronizar. Así podrías:
-1. Cargar en el celu → Sincronizar (sube al Sheet)
-2. Abrir en la PC → Importar desde Sheets (baja del Sheet)
-3. Cargar algo en la PC → Sincronizar (sube al Sheet)
-4. Volver al celu → Importar desde Sheets (baja del Sheet)
-
-Es decir: funciona, pero **no es tiempo real ni automático** — tenés que sincronizar manualmente en cada dispositivo cada vez que querés "pasar" los datos de uno a otro. Si querés, te agrego esa función de importar-desde-Sheets en la próxima vuelta para cerrar el círculo completo.
-
-**Mientras tanto, lo más simple:** Elegí un dispositivo "principal" (por ejemplo el celular) para cargar todo el día a día, y usá la PC solo para mirar el Google Sheet directamente (ahí siempre vas a ver los datos actualizados después de cada sync), sin necesidad de que la PWA de la PC tenga los datos cargados también.
+> **Recomendación:** conectá **primero** el dispositivo que tiene tus datos correctos y dejá que suba todo. Después conectá los demás. Así te asegurás de que la "fuente de verdad" quede bien cargada desde el arranque.
 
 ---
 
-## 🆕 Novedades de esta versión
+## 🔄 Cómo funciona la sincronización (resumen)
 
-- **Préstamos con cronograma de cuotas**: al crear un préstamo se genera automáticamente el calendario completo de cuotas (monto + fecha cada una). Cada cuota se puede editar individualmente desde "Ver cronograma" en la tarjeta del préstamo. El capital restante y el monto vencido sin pagar se calculan solos a partir de qué cuotas están marcadas como pagadas.
-- **Historial con filtros**: ahora se puede filtrar por rango de fechas (desde/hasta) y por categoría específica, sin estar limitado a un solo mes — podés ver todo el historial completo si querés.
-- **Editar movimientos**: cada fila del historial tiene un botón de editar (lápiz) además del de borrar, para corregir descripción, monto, fecha o categoría sin tener que eliminar y volver a cargar.
-
-> Si ya tenías el Apps Script conectado de una versión anterior, este sync agrega una hoja nueva "Cuotas Préstamos" al Sheet — se crea sola la próxima vez que sincronices, no hace falta hacer nada manual.
-
-## 💾 Cómo funcionan los datos (resumen)
-
-- **Local**: todo se guarda automáticamente en el dispositivo (localStorage), funciona sin internet
-- **Sync automático**: una vez conectado el Apps Script, cada cambio que hagas (cargar un gasto, registrar un pago, etc.) se sube solo a los 8 segundos de inactividad. Además, hay un respaldo cada 1 minuto mientras la app esté abierta, por si algo se pasó. También sincroniza al volver a la pestaña o al recuperar la conexión a internet.
-  > Esto funciona solo mientras la app/pestaña está abierta. Si la cerrás, el auto-sync se pausa hasta que la abras de nuevo — no hay forma de evitar esto sin un servidor propio corriendo 24/7.
-- **Sync manual**: el botón "Subir datos a Google Sheets" sigue disponible por si querés forzarlo en el momento
-- **Export Excel/JSON**: para respaldos y traspasos entre dispositivos sin pasar por Google
+- **Automática:** cada cambio se sube tras unos segundos, y la app consulta el Sheet cada 30 s para traer lo de otros dispositivos.
+- **Por fusión:** nunca se pisa. Cada registro gana según su marca de tiempo más reciente.
+- **Con tombstones:** los borrados se marcan y se propagan (no "reviven" en otro dispositivo).
+- **Con detección de conflictos:** si editás lo mismo en dos lados a la vez, la app te muestra ambas versiones y elegís.
 
 ---
 
-## ❓ Preguntas frecuentes
+## 🛠️ Problemas comunes
 
-**¿Por qué me pide "Configuración avanzada" al autorizar el script?**
-Porque el script es tuyo y no pasó por la revisión de la tienda de apps de Google (no la necesita, porque no es pública). Es seguro porque solo vos tenés la URL y la clave.
+**"Clave incorrecta"** → La clave de la app no coincide con el `SECRET` del script. Revisá que sean idénticas (mayúsculas incluidas).
 
-**¿Esto tiene algún costo?**
-No. Google Sheets, Apps Script y los disparadores diarios son gratuitos para este volumen de uso.
+**No sincroniza / error de conexión** → Verificá que hayas hecho "Nueva versión" al implementar el script actualizado. Si implementaste una versión nueva desde cero, la URL cambió: pegá la nueva en la app.
 
-**¿Qué pasa si pierdo o cambio el teléfono?**
-Si ya sincronizaste con Sheets, tus datos están a salvo ahí. Exportá también un backup `.json` por las dudas (botón Datos → Exportar backup).
+**No veo los cambios del otro dispositivo** → Esperá hasta 30 segundos, o tocá "Sincronizar ahora". Asegurate de que ambos estén conectados con la misma URL y clave.
 
-**¿Alguien más puede ver mis datos?**
-No, a menos que compartas la URL del Sheet o la clave secreta del script con alguien.
+**La app no se actualizó a v17** → Configuración del sitio en Chrome → "Eliminar datos del sitio" → reinstalá. Tus datos están en el Sheet, no se pierden.

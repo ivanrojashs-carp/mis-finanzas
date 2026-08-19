@@ -1,8 +1,10 @@
-const CACHE = 'mis-finanzas-v16';
+const CACHE = 'mis-finanzas-v18';
 const ASSETS = [
   './',
   './index.html',
   './manifest.json',
+  './sync-engine.js',
+  './google-auth.js',
   'https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css',
   'https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js',
   'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'

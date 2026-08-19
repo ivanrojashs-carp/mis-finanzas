@@ -3,10 +3,19 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="theme-color" content="#1D9E75">
+<meta name="theme-color" content="#4355C7">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="MisFinanzas">
+<script>
+  // Aplicar el tema guardado ANTES de renderizar, para evitar el parpadeo
+  // de un tema incorrecto al abrir. Valores: 'auto' (sigue al sistema),
+  // 'light', 'dark'. Por defecto: 'auto'.
+  (function () {
+    var t = localStorage.getItem('mf_theme') || 'auto';
+    document.documentElement.setAttribute('data-theme', t);
+  })();
+</script>
 <meta name="description" content="Gestión de finanzas personales — 100% local, exporta a Excel">
 <title>Mis Finanzas</title>
 <link rel="manifest" href="manifest.json">
@@ -16,135 +25,328 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
-  :root {
+  /* ═══════════════════════════════════════════════════════════════
+     MIS FINANZAS — Sistema de diseño Material (índigo)
+     Modo claro/oscuro con toggle manual + automático por sistema.
+     Tokens de color, elevación y transparencias centralizados acá.
+     ═══════════════════════════════════════════════════════════════ */
+
+  /* —— MODO CLARO (por defecto) —— */
+  :root, :root[data-theme="light"] {
+    /* Marca (acento índigo Material) */
+    --primary: #4355C7; --primary-d: #33429E; --primary-l: #6577E0;
+    --primary-bg: #EAECFB; --on-primary: #FFFFFF;
+    /* Capa de estado translúcida sobre el acento (para hover/press) */
+    --primary-a08: rgba(67,85,199,0.08);
+    --primary-a12: rgba(67,85,199,0.12);
+    --primary-a20: rgba(67,85,199,0.20);
+
+    /* Semánticos */
     --green: #1D9E75; --green-d: #0F6E56; --green-bg: #E1F5EE;
     --red: #E24B4A; --red-bg: #FCEBEB;
     --amber: #BA7517; --amber-bg: #FAEEDA;
     --blue: #185FA5; --blue-bg: #E6F1FB;
     --purple: #534AB7; --purple-bg: #EEEDFE;
-    --bg: #F5F5F5; --surface: #FFFFFF; --border: rgba(0,0,0,0.1);
-    --text: #1a1a1a; --text-muted: #666; --radius: 12px; --radius-sm: 8px;
+
+    /* Superficies y fondo (Material: fondo + superficies elevadas) */
+    --bg: #F1F2F8;
+    --surface: rgba(255,255,255,0.72);      /* translúcida para efecto vidrio */
+    --surface-solid: #FFFFFF;
+    --surface-2: rgba(255,255,255,0.55);
+    --surface-hi: #FFFFFF;
+    --border: rgba(20,24,60,0.10);
+    --border-strong: rgba(20,24,60,0.16);
+
+    --text: #171A2B; --text-muted: #626784;
+
+    /* Elevación (sombras Material) */
+    --elev-1: 0 1px 2px rgba(23,26,43,0.06), 0 1px 3px rgba(23,26,43,0.05);
+    --elev-2: 0 2px 6px rgba(23,26,43,0.08), 0 1px 3px rgba(23,26,43,0.06);
+    --elev-3: 0 6px 16px rgba(23,26,43,0.12), 0 2px 6px rgba(23,26,43,0.08);
+    --elev-primary: 0 4px 14px rgba(67,85,199,0.30);
+
+    --radius: 16px; --radius-sm: 12px; --radius-xs: 8px;
     --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --glass-blur: saturate(180%) blur(20px);
   }
+
+  /* —— MODO OSCURO (forzado) —— */
+  :root[data-theme="dark"] {
+    --primary: #8A97F5; --primary-d: #6577E0; --primary-l: #A6B0F8;
+    --primary-bg: #22264A; --on-primary: #0E1020;
+    --primary-a08: rgba(138,151,245,0.10);
+    --primary-a12: rgba(138,151,245,0.16);
+    --primary-a20: rgba(138,151,245,0.26);
+
+    --green: #35C495; --green-d: #1D9E75; --green-bg: #0E2E23;
+    --red: #F0726F; --red-bg: #33191A;
+    --amber: #E0A64B; --amber-bg: #33260E;
+    --blue: #5C9BE0; --blue-bg: #0E2033;
+    --purple: #9A90E8; --purple-bg: #201C3A;
+
+    --bg: #0B0D18;
+    --surface: rgba(30,33,54,0.72);
+    --surface-solid: #1B1E32;
+    --surface-2: rgba(40,44,70,0.55);
+    --surface-hi: #23263E;
+    --border: rgba(255,255,255,0.10);
+    --border-strong: rgba(255,255,255,0.16);
+
+    --text: #EDEEF6; --text-muted: #9AA0C0;
+
+    --elev-1: 0 1px 3px rgba(0,0,0,0.40);
+    --elev-2: 0 2px 8px rgba(0,0,0,0.48);
+    --elev-3: 0 8px 24px rgba(0,0,0,0.55);
+    --elev-primary: 0 4px 16px rgba(67,85,199,0.45);
+  }
+
+  /* —— MODO AUTOMÁTICO: aplica oscuro si el sistema está en oscuro —— */
   @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #0f0f0f; --surface: #1c1c1e; --border: rgba(255,255,255,0.1);
-      --text: #f0f0f0; --text-muted: #999;
-      --green-bg: #0a2e20; --red-bg: #2d1010; --amber-bg: #2d1f05;
-      --blue-bg: #0a1f35; --purple-bg: #1a1730;
+    :root[data-theme="auto"] {
+      --primary: #8A97F5; --primary-d: #6577E0; --primary-l: #A6B0F8;
+      --primary-bg: #22264A; --on-primary: #0E1020;
+      --primary-a08: rgba(138,151,245,0.10);
+      --primary-a12: rgba(138,151,245,0.16);
+      --primary-a20: rgba(138,151,245,0.26);
+      --green: #35C495; --green-d: #1D9E75; --green-bg: #0E2E23;
+      --red: #F0726F; --red-bg: #33191A;
+      --amber: #E0A64B; --amber-bg: #33260E;
+      --blue: #5C9BE0; --blue-bg: #0E2033;
+      --purple: #9A90E8; --purple-bg: #201C3A;
+      --bg: #0B0D18;
+      --surface: rgba(30,33,54,0.72);
+      --surface-solid: #1B1E32;
+      --surface-2: rgba(40,44,70,0.55);
+      --surface-hi: #23263E;
+      --border: rgba(255,255,255,0.10);
+      --border-strong: rgba(255,255,255,0.16);
+      --text: #EDEEF6; --text-muted: #9AA0C0;
+      --elev-1: 0 1px 3px rgba(0,0,0,0.40);
+      --elev-2: 0 2px 8px rgba(0,0,0,0.48);
+      --elev-3: 0 8px 24px rgba(0,0,0,0.55);
+      --elev-primary: 0 4px 16px rgba(67,85,199,0.45);
     }
   }
+
   * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-  html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+  html, body { height: 100%; overflow: hidden; color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  /* Fondo con degradado sutil índigo para dar profundidad al efecto vidrio */
+  body {
+    background:
+      radial-gradient(1200px 600px at 100% -10%, var(--primary-a08), transparent 60%),
+      radial-gradient(1000px 500px at -10% 110%, var(--primary-a08), transparent 55%),
+      var(--bg);
+    background-attachment: fixed;
+  }
   #app { display: flex; flex-direction: column; height: 100%; height: 100dvh; }
-  .topbar { background: var(--surface); border-bottom: 0.5px solid var(--border); padding: 12px 16px 10px; display: flex; justify-content: space-between; align-items: center; padding-top: max(12px, env(safe-area-inset-top)); }
-  .topbar-title { font-size: 17px; font-weight: 600; }
+
+  /* —— Barra superior (vidrio esmerilado) —— */
+  .topbar {
+    background: var(--surface); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
+    border-bottom: 0.5px solid var(--border); padding: 12px 16px 10px;
+    display: flex; justify-content: space-between; align-items: center;
+    padding-top: max(12px, env(safe-area-inset-top)); position: relative; z-index: 10;
+  }
+  .topbar-title { font-size: 17px; font-weight: 700; letter-spacing: -0.2px; }
   .topbar-sub { font-size: 12px; color: var(--text-muted); margin-top: 1px; }
-  .sync-btn { display: flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 20px; border: 0.5px solid var(--border); background: none; cursor: pointer; font-size: 13px; color: var(--text); }
+  .sync-btn {
+    display: flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 22px;
+    border: 0.5px solid var(--border-strong); background: var(--surface-2);
+    backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
+    cursor: pointer; font-size: 13px; color: var(--text); font-weight: 500; transition: all .18s;
+  }
+  .sync-btn:active { transform: scale(0.96); background: var(--primary-a08); }
   .sync-btn.synced { color: var(--green); border-color: var(--green); }
+
   .screens { flex: 1; overflow: hidden; position: relative; }
-  .screen { position: absolute; inset: 0; overflow-y: auto; padding: 14px 14px 80px; display: none; -webkit-overflow-scrolling: touch; }
-  .screen.active { display: block; }
-  .navbar { background: var(--surface); border-top: 0.5px solid var(--border); display: flex; padding-bottom: max(8px, var(--safe-bottom)); }
-  .navbar button { flex: 1; padding: 10px 4px 8px; border: none; background: none; cursor: pointer; font-size: 10px; color: var(--text-muted); display: flex; flex-direction: column; align-items: center; gap: 3px; transition: color .15s; }
-  .navbar button i { font-size: 22px; }
-  .navbar button.active { color: var(--green); }
-  .card { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 12px; }
-  .card-title { font-size: 14px; font-weight: 600; margin-bottom: 12px; }
+  .screen { position: absolute; inset: 0; overflow-y: auto; padding: 16px 14px 90px; display: none; -webkit-overflow-scrolling: touch; }
+  .screen.active { display: block; animation: screen-in .28s cubic-bezier(.2,.7,.3,1); }
+  @keyframes screen-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+  /* —— Barra de navegación inferior (vidrio) —— */
+  .navbar {
+    background: var(--surface); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
+    border-top: 0.5px solid var(--border); display: flex; padding-bottom: max(8px, var(--safe-bottom));
+    position: relative; z-index: 10;
+  }
+  .navbar button {
+    flex: 1; padding: 10px 4px 8px; border: none; background: none; cursor: pointer; font-size: 10px;
+    color: var(--text-muted); display: flex; flex-direction: column; align-items: center; gap: 3px;
+    transition: color .18s; position: relative; font-weight: 500;
+  }
+  .navbar button i { font-size: 23px; transition: transform .18s; }
+  .navbar button.active { color: var(--primary); }
+  .navbar button.active i { transform: translateY(-1px); }
+  /* Indicador "píldora" translúcido bajo el ítem activo (Material 3) */
+  .navbar button.active::before {
+    content: ''; position: absolute; top: 6px; width: 46px; height: 30px; border-radius: 16px;
+    background: var(--primary-a12); z-index: -1;
+  }
+
+  /* —— Tarjetas / superficies elevadas —— */
+  .card {
+    background: var(--surface); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
+    border: 0.5px solid var(--border); border-radius: var(--radius); padding: 15px 16px; margin-bottom: 12px;
+    box-shadow: var(--elev-1);
+  }
+  .card-title { font-size: 14px; font-weight: 700; margin-bottom: 12px; letter-spacing: -0.1px; }
   .metric-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
-  .metric { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius-sm); padding: 12px 14px; }
-  .metric-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .4px; margin-bottom: 4px; }
-  .metric-value { font-size: 19px; font-weight: 700; }
+  .metric {
+    background: var(--surface); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
+    border: 0.5px solid var(--border); border-radius: var(--radius-sm); padding: 13px 14px; box-shadow: var(--elev-1);
+  }
+  .metric-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 4px; }
+  .metric-value { font-size: 20px; font-weight: 800; letter-spacing: -0.4px; }
   .green { color: var(--green); } .red { color: var(--red); } .amber { color: var(--amber); } .blue { color: var(--blue); }
+
+  /* —— Alertas —— */
   .alert { display: flex; gap: 10px; padding: 12px 14px; border-radius: var(--radius-sm); margin-bottom: 10px; font-size: 13px; line-height: 1.5; }
   .alert i { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
   .alert.danger { background: var(--red-bg); color: var(--red); }
   .alert.warning { background: var(--amber-bg); color: var(--amber); }
   .alert.success { background: var(--green-bg); color: var(--green); }
-  .alert.info { background: var(--blue-bg); color: var(--blue); }
+  .alert.info { background: var(--primary-bg); color: var(--primary-d); }
   .alert .alert-body { color: var(--text); }
+
+  /* —— Transacciones —— */
   .tx-item { display: flex; align-items: center; gap: 12px; padding: 11px 0; border-bottom: 0.5px solid var(--border); }
   .tx-item:last-child { border-bottom: none; }
-  .tx-icon { width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 17px; flex-shrink: 0; }
+  .tx-icon { width: 40px; height: 40px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
   .tx-info { flex: 1; min-width: 0; }
-  .tx-name { font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tx-name { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .tx-meta { font-size: 12px; color: var(--text-muted); margin-top: 1px; }
-  .tx-amount { font-size: 15px; font-weight: 600; flex-shrink: 0; }
+  .tx-amount { font-size: 15px; font-weight: 700; flex-shrink: 0; }
+
+  /* —— Tabs y chips (píldoras translúcidas) —— */
   .tab-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
-  .tab { padding: 6px 14px; border-radius: 20px; border: 0.5px solid var(--border); background: none; cursor: pointer; font-size: 13px; color: var(--text-muted); transition: all .15s; }
-  .tab.active { background: var(--green); color: #fff; border-color: var(--green); }
+  .tab { padding: 7px 15px; border-radius: 22px; border: 0.5px solid var(--border-strong); background: var(--surface-2); cursor: pointer; font-size: 13px; color: var(--text-muted); transition: all .18s; font-weight: 500; }
+  .tab:active { transform: scale(0.96); }
+  .tab.active { background: var(--primary); color: var(--on-primary); border-color: var(--primary); box-shadow: var(--elev-primary); }
   .form-group { margin-bottom: 14px; }
   .form-group label { display: block; font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .4px; margin-bottom: 6px; }
-  .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 10px 13px; border: 0.5px solid var(--border); border-radius: var(--radius-sm); background: var(--bg); color: var(--text); font-size: 15px; outline: none; transition: border-color .15s; }
-  .form-group input:focus, .form-group select:focus { border-color: var(--green); }
+  .form-group input, .form-group select, .form-group textarea {
+    width: 100%; padding: 12px 14px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+    background: var(--surface-2); color: var(--text); font-size: 15px; outline: none; transition: all .18s;
+  }
+  .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+    border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-a20); background: var(--surface-hi);
+  }
   .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .chip-grid { display: flex; flex-wrap: wrap; gap: 7px; }
-  .chip { padding: 7px 14px; border-radius: 20px; border: 0.5px solid var(--border); background: none; cursor: pointer; font-size: 13px; color: var(--text-muted); transition: all .15s; }
-  .chip.on { background: var(--green-bg); color: var(--green); border-color: var(--green); }
-  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 12px 20px; border-radius: var(--radius-sm); border: 0.5px solid var(--border); background: none; cursor: pointer; font-size: 15px; color: var(--text); font-weight: 500; transition: all .15s; width: 100%; }
+  .chip { padding: 8px 15px; border-radius: 22px; border: 0.5px solid var(--border-strong); background: var(--surface-2); cursor: pointer; font-size: 13px; color: var(--text-muted); transition: all .18s; font-weight: 500; }
+  .chip:active { transform: scale(0.96); }
+  .chip.on { background: var(--primary-a12); color: var(--primary); border-color: var(--primary); }
+
+  /* —— Botones (Material con capa de estado translúcida) —— */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 13px 20px;
+    border-radius: var(--radius-sm); border: 1px solid var(--border-strong); background: var(--surface-2);
+    backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
+    cursor: pointer; font-size: 15px; color: var(--text); font-weight: 600; transition: all .18s; width: 100%;
+    position: relative; overflow: hidden;
+  }
+  .btn::after { content: ''; position: absolute; inset: 0; background: var(--primary); opacity: 0; transition: opacity .18s; }
+  .btn:hover::after { opacity: .06; }
   .btn:active { transform: scale(0.98); }
-  .btn.primary { background: var(--green); color: #fff; border-color: var(--green); }
-  .btn.primary:hover { background: var(--green-d); }
+  .btn:active::after { opacity: .12; }
+  .btn.primary { background: var(--primary); color: var(--on-primary); border-color: transparent; box-shadow: var(--elev-primary); }
+  .btn.primary::after { background: #fff; }
+  .btn.primary:hover { background: var(--primary-d); }
   .btn.danger-btn { color: var(--red); border-color: var(--red-bg); background: var(--red-bg); }
-  .btn.sm { padding: 7px 12px; font-size: 13px; width: auto; }
-  .progress-wrap { height: 7px; background: var(--bg); border-radius: 4px; overflow: hidden; margin-top: 6px; }
-  .progress-bar { height: 100%; border-radius: 4px; transition: width .3s; }
+  .btn.danger-btn::after { background: var(--red); }
+  .btn.sm { padding: 8px 13px; font-size: 13px; width: auto; }
+
+  /* —— Progreso —— */
+  .progress-wrap { height: 8px; background: var(--primary-a08); border-radius: 5px; overflow: hidden; margin-top: 6px; }
+  .progress-bar { height: 100%; border-radius: 5px; transition: width .4s cubic-bezier(.2,.7,.3,1); }
   .budget-row { margin-bottom: 14px; }
   .budget-header { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; }
-  .empty { text-align: center; padding: 40px 20px; color: var(--text-muted); }
-  .empty i { font-size: 44px; display: block; margin-bottom: 10px; opacity: .35; }
-  .pill { display: inline-block; padding: 2px 9px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+  .empty { text-align: center; padding: 44px 20px; color: var(--text-muted); }
+  .empty i { font-size: 46px; display: block; margin-bottom: 10px; opacity: .3; }
+
+  /* —— Pills semánticas —— */
+  .pill { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; }
   .pill.expense { background: var(--red-bg); color: var(--red); }
   .pill.income { background: var(--green-bg); color: var(--green); }
   .pill.savings { background: var(--blue-bg); color: var(--blue); }
   .pill.debt { background: var(--amber-bg); color: var(--amber); }
   .pill.investment { background: var(--purple-bg); color: var(--purple); }
-  .section-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .5px; margin: 16px 0 8px; }
-  .delete-btn { background: none; border: none; cursor: pointer; color: var(--text-muted); padding: 6px; border-radius: 6px; }
-  .delete-btn:active { color: var(--red); }
-  /* Badge de alerta en navbar */
+  .section-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .5px; margin: 18px 0 8px; }
+  .delete-btn { background: none; border: none; cursor: pointer; color: var(--text-muted); padding: 7px; border-radius: 10px; transition: all .18s; }
+  .delete-btn:active { color: var(--red); background: var(--red-bg); }
+
+  /* —— Badge de alerta en navbar —— */
   .nav-badge { position: relative; }
-  .nav-badge::after { content: ''; position: absolute; top: 6px; right: calc(50% - 14px); width: 8px; height: 8px; background: var(--red); border-radius: 50%; border: 2px solid var(--surface); animation: pulse-badge 1.5s infinite; }
+  .nav-badge::after { content: ''; position: absolute; top: 6px; right: calc(50% - 16px); width: 8px; height: 8px; background: var(--red); border-radius: 50%; border: 2px solid var(--surface-solid); animation: pulse-badge 1.5s infinite; }
   @keyframes pulse-badge { 0%,100%{transform:scale(1);opacity:1} 50%{transform:scale(1.3);opacity:.7} }
-  /* Tarjeta de crédito card */
-  .cc-card { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%); border-radius: var(--radius); padding: 18px; color: #fff; margin-bottom: 12px; position: relative; overflow: hidden; }
-  .cc-card::before { content:''; position:absolute; top:-30px; right:-30px; width:120px; height:120px; border-radius:50%; background:rgba(255,255,255,.05); }
-  .cc-card::after { content:''; position:absolute; bottom:-40px; left:-20px; width:150px; height:150px; border-radius:50%; background:rgba(255,255,255,.04); }
-  .cc-name { font-size:15px; font-weight:600; margin-bottom:4px; }
-  .cc-saldo { font-size:26px; font-weight:700; margin:10px 0 4px; }
-  .cc-meta { font-size:12px; opacity:.7; }
+
+  /* —— Tarjeta de crédito (degradado índigo) —— */
+  .cc-card { background: linear-gradient(135deg, #3A3F8F 0%, #4355C7 55%, #5C6BC0 100%); border-radius: var(--radius); padding: 18px; color: #fff; margin-bottom: 12px; position: relative; overflow: hidden; box-shadow: var(--elev-2); }
+  .cc-card::before { content:''; position:absolute; top:-30px; right:-30px; width:120px; height:120px; border-radius:50%; background:rgba(255,255,255,.08); }
+  .cc-card::after { content:''; position:absolute; bottom:-40px; left:-20px; width:150px; height:150px; border-radius:50%; background:rgba(255,255,255,.05); }
+  .cc-name { font-size:15px; font-weight:700; margin-bottom:4px; }
+  .cc-saldo { font-size:27px; font-weight:800; margin:10px 0 4px; letter-spacing:-0.5px; }
+  .cc-meta { font-size:12px; opacity:.75; }
   .cc-actions { display:flex; gap:8px; margin-top:14px; position:relative; z-index:1; }
-  .cc-btn { flex:1; padding:8px; border-radius:8px; border:1px solid rgba(255,255,255,.3); background:rgba(255,255,255,.1); color:#fff; cursor:pointer; font-size:13px; text-align:center; }
-  .cc-btn:active { background:rgba(255,255,255,.2); }
-  /* Simulador */
-  .sim-result { background: var(--blue-bg); border-radius: var(--radius-sm); padding: 14px; margin-top: 14px; }
+  .cc-btn { flex:1; padding:9px; border-radius:10px; border:1px solid rgba(255,255,255,.25); background:rgba(255,255,255,.14); backdrop-filter:blur(6px); color:#fff; cursor:pointer; font-size:13px; text-align:center; font-weight:600; transition:all .18s; }
+  .cc-btn:active { background:rgba(255,255,255,.28); transform:scale(0.97); }
+
+  /* —— Simulador —— */
+  .sim-result { background: var(--primary-bg); border-radius: var(--radius-sm); padding: 14px; margin-top: 14px; }
   .sim-month-row { display:flex; justify-content:space-between; padding:6px 0; border-bottom:0.5px solid var(--border); font-size:13px; }
-  .sim-month-row:last-child { border-bottom:none; font-weight:600; }
-  /* Préstamos */
-  .loan-card { background: linear-gradient(135deg, #1a1035 0%, #2d1b69 100%); border-radius: var(--radius); padding: 18px; color: #fff; margin-bottom: 12px; position: relative; overflow: hidden; }
-  .loan-card::before { content:''; position:absolute; top:-30px; right:-30px; width:120px; height:120px; border-radius:50%; background:rgba(255,255,255,.05); }
-  /* Balance histórico */
-  .period-card { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 10px; cursor:pointer; transition: border-color .15s; }
-  .period-card:hover { border-color: var(--green); }
-  .period-card.open { border-color: var(--green); }
+  .sim-month-row:last-child { border-bottom:none; font-weight:700; }
+
+  /* —— Préstamos (degradado violeta-índigo) —— */
+  .loan-card { background: linear-gradient(135deg, #2D2A6E 0%, #4A3F9E 55%, #6152C4 100%); border-radius: var(--radius); padding: 18px; color: #fff; margin-bottom: 12px; position: relative; overflow: hidden; box-shadow: var(--elev-2); }
+  .loan-card::before { content:''; position:absolute; top:-30px; right:-30px; width:120px; height:120px; border-radius:50%; background:rgba(255,255,255,.07); }
+
+  /* —— Balance histórico —— */
+  .period-card { background: var(--surface); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); border: 0.5px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 10px; cursor:pointer; transition: all .18s; box-shadow: var(--elev-1); }
+  .period-card:hover { border-color: var(--primary); }
+  .period-card.open { border-color: var(--primary); box-shadow: var(--elev-2); }
   .period-detail { display:none; margin-top:12px; padding-top:12px; border-top:0.5px solid var(--border); }
   .period-card.open .period-detail { display:block; }
-  /* Modal */
-  .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 200; align-items: flex-end; }
-  .overlay.open { display: flex; }
-  .modal { background: var(--surface); border-radius: 20px 20px 0 0; padding: 20px 16px; width: 100%; max-height: 90dvh; overflow-y: auto; padding-bottom: max(24px, var(--safe-bottom)); }
-  .modal-handle { width: 36px; height: 4px; background: var(--border); border-radius: 2px; margin: 0 auto 16px; }
-  .modal-title { font-size: 17px; font-weight: 600; margin-bottom: 16px; }
-  /* Toast */
-  #toast { position: fixed; bottom: calc(70px + var(--safe-bottom)); left: 50%; transform: translateX(-50%) translateY(20px); background: var(--text); color: var(--surface); padding: 10px 20px; border-radius: 20px; font-size: 14px; opacity: 0; transition: all .3s; z-index: 300; white-space: nowrap; pointer-events: none; }
+
+  /* —— Modal (hoja inferior con vidrio) —— */
+  .overlay { display: none; position: fixed; inset: 0; background: rgba(10,12,24,.5); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); z-index: 200; align-items: flex-end; }
+  .overlay.open { display: flex; animation: overlay-in .2s ease; }
+  @keyframes overlay-in { from { opacity: 0; } to { opacity: 1; } }
+  .modal {
+    background: var(--surface-hi); border-radius: 24px 24px 0 0; padding: 20px 16px; width: 100%;
+    max-height: 90dvh; overflow-y: auto; padding-bottom: max(24px, var(--safe-bottom));
+    box-shadow: var(--elev-3); animation: modal-in .32s cubic-bezier(.2,.8,.2,1);
+  }
+  @keyframes modal-in { from { transform: translateY(100%); } to { transform: none; } }
+  .modal-handle { width: 40px; height: 4px; background: var(--border-strong); border-radius: 3px; margin: 0 auto 16px; }
+  .modal-title { font-size: 17px; font-weight: 700; margin-bottom: 16px; letter-spacing: -0.2px; }
+
+  /* —— Toast —— */
+  #toast { position: fixed; bottom: calc(78px + var(--safe-bottom)); left: 50%; transform: translateX(-50%) translateY(20px); background: var(--text); color: var(--bg); padding: 11px 22px; border-radius: 22px; font-size: 14px; font-weight: 500; opacity: 0; transition: all .3s; z-index: 300; white-space: nowrap; pointer-events: none; box-shadow: var(--elev-3); }
   #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
   @keyframes spin { to { transform: rotate(360deg); } }
-  /* Banner de actualización disponible */
-  #update-banner { position: fixed; top: 0; left: 0; right: 0; background: var(--green); color: #fff; padding: 12px 16px; padding-top: max(12px, env(safe-area-inset-top)); display: none; align-items: center; justify-content: space-between; gap: 10px; z-index: 400; font-size: 14px; box-shadow: 0 2px 10px rgba(0,0,0,.15); }
+
+  /* —— Selector de tema (claro/oscuro/auto) —— */
+  .theme-toggle { display: flex; gap: 6px; background: var(--surface-2); border: 0.5px solid var(--border); border-radius: 14px; padding: 4px; }
+  .theme-toggle button { flex: 1; padding: 9px 8px; border: none; background: none; border-radius: 11px; cursor: pointer; font-size: 12px; font-weight: 600; color: var(--text-muted); display: flex; flex-direction: column; align-items: center; gap: 4px; transition: all .18s; }
+  .theme-toggle button i { font-size: 18px; }
+  .theme-toggle button.active { background: var(--primary); color: var(--on-primary); box-shadow: var(--elev-primary); }
+
+  /* —— Banner de actualización —— */
+  #update-banner { position: fixed; top: 0; left: 0; right: 0; background: var(--primary); color: var(--on-primary); padding: 12px 16px; padding-top: max(12px, env(safe-area-inset-top)); display: none; align-items: center; justify-content: space-between; gap: 10px; z-index: 400; font-size: 14px; box-shadow: var(--elev-3); }
   #update-banner.show { display: flex; }
-  #update-banner button { background: rgba(255,255,255,.25); border: none; color: #fff; padding: 7px 14px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
-  #update-banner button:active { background: rgba(255,255,255,.4); }
+  #update-banner button { background: rgba(255,255,255,.22); border: none; color: var(--on-primary); padding: 8px 15px; border-radius: 10px; font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+  #update-banner button:active { background: rgba(255,255,255,.38); }
+
+  /* —— Fallback: si el navegador no soporta backdrop-filter (Android viejo),
+     usamos superficies sólidas para que el texto siempre sea legible —— */
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .topbar, .navbar, .card, .metric, .period-card, .sync-btn, .btn {
+      background: var(--surface-solid);
+    }
+    .modal { background: var(--surface-hi); }
+  }
 </style>
+
 </head>
 <body>
 <div id="app">
@@ -241,7 +443,7 @@
         </div>
         <div class="form-group">
           <label>Categoría</label>
-          <select id="h-cat" onchange="renderHistory()" style="width:100%;padding:10px 13px;border:0.5px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font-size:15px">
+          <select id="h-cat" onchange="renderHistory()" style="width:100%;padding:10px 13px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);background:var(--surface-2);color:var(--text);font-size:15px">
             <option value="">Todas las categorías</option>
           </select>
         </div>
@@ -270,7 +472,7 @@
         <div class="card-title">Asignar presupuesto</div>
         <div class="form-group">
           <label>Categoría</label>
-          <select id="b-cat" style="width:100%;padding:10px 13px;border:0.5px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font-size:15px"></select>
+          <select id="b-cat" style="width:100%;padding:10px 13px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);background:var(--surface-2);color:var(--text);font-size:15px"></select>
         </div>
         <div class="form-group">
           <label>Límite mensual ($)</label>
@@ -355,7 +557,18 @@
     <!-- CONFIGURACIÓN -->
     <div class="screen" id="s-settings">
       <p style="font-size:17px;font-weight:600;margin-bottom:4px">Configuración</p>
-      <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Colores, categorías y datos</p>
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Apariencia, colores, categorías y datos</p>
+
+      <!-- Selector de tema -->
+      <div class="card">
+        <div class="card-title">Apariencia</div>
+        <div class="theme-toggle" id="theme-toggle">
+          <button data-theme-val="light" onclick="setTheme('light')"><i class="ti ti-sun"></i> Claro</button>
+          <button data-theme-val="dark" onclick="setTheme('dark')"><i class="ti ti-moon"></i> Oscuro</button>
+          <button data-theme-val="auto" onclick="setTheme('auto')"><i class="ti ti-device-mobile"></i> Auto</button>
+        </div>
+        <p style="font-size:12px;color:var(--text-muted);margin-top:10px">En "Auto", la app sigue el modo claro/oscuro de tu teléfono.</p>
+      </div>
 
       <!-- Colores por tipo -->
       <div class="card">
@@ -371,7 +584,7 @@
         <div class="card-title">Agregar categoría personalizada</div>
         <div class="form-group">
           <label>Tipo</label>
-          <select id="nc-type" style="width:100%;padding:10px 13px;border:0.5px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font-size:15px">
+          <select id="nc-type" style="width:100%;padding:10px 13px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);background:var(--surface-2);color:var(--text);font-size:15px">
             <option value="expense">Gasto</option>
             <option value="income">Ingreso</option>
             <option value="savings">Ahorro</option>
@@ -421,7 +634,7 @@
         </div>
         <div class="form-group" style="margin-top:10px">
           <label>Días de anticipación</label>
-          <select id="alert-days" onchange="saveAlertConfig()" style="width:100%;padding:10px 13px;border:0.5px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font-size:15px">
+          <select id="alert-days" onchange="saveAlertConfig()" style="width:100%;padding:10px 13px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);background:var(--surface-2);color:var(--text);font-size:15px">
             <option value="3">3 días antes</option>
             <option value="5" selected>5 días antes</option>
             <option value="7">7 días antes</option>
@@ -558,6 +771,17 @@
   </div>
 </div>
 
+<!-- Modal de resolución de conflictos de sincronización -->
+<div class="overlay" id="conflict-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">⚠️ Conflictos de sincronización</div>
+    <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px">Estos registros se modificaron en dos dispositivos a la vez. Elegí con cuál quedarte en cada caso.</p>
+    <div id="conflict-list" style="max-height:55vh;overflow-y:auto"></div>
+    <button class="btn primary" style="margin-top:10px" onclick="applyConflictResolutions()"><i class="ti ti-check"></i> Aplicar decisiones</button>
+  </div>
+</div>
+
 <!-- Modal Datos / Drive -->
 <div class="overlay" id="drive-overlay" onclick="if(event.target===this)closeDrive()">
   <div class="modal">
@@ -575,6 +799,7 @@
 
 <div id="toast"></div>
 
+<script src="sync-engine.js"></script>
 <script src="google-auth.js"></script>
 <script>
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
@@ -644,7 +869,9 @@ function parseDecimal(str) {
 
 const fmt = n => '$' + (Math.round(n * 100) / 100).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const curMonth = () => new Date().toISOString().slice(0, 7);
-const monthTxs = m => txs.filter(t => t.date.startsWith(m));
+// activeTxs: transacciones "vivas" (excluye tombstones deleted=true del sync)
+const activeTxs = () => txs.filter(t => !t.deleted);
+const monthTxs = m => txs.filter(t => !t.deleted && t.date && t.date.startsWith(m));
 function monthStats(m) {
   const ts = monthTxs(m);
   return {
@@ -686,7 +913,7 @@ function updateAlertBadges() {
   const today = new Date().getDate();
 
   // Tarjetas
-  const cardDue = cards.some(c => {
+  const cardDue = cards.filter(c=>!c.deleted).some(c => {
     if (!c.venc || c.saldo <= 0) return false;
     const d = c.venc >= today ? c.venc - today : (31 - today) + c.venc;
     return d <= 5;
@@ -695,7 +922,7 @@ function updateAlertBadges() {
 
   // Préstamos — basado en la próxima cuota pendiente de cada uno
   const hoyDate2 = new Date(); hoyDate2.setHours(0,0,0,0);
-  const loanDue = loans.some(l => {
+  const loanDue = loans.filter(l=>!l.deleted).some(l => {
     const pendientes = (l.installments || []).filter(c => !c.pagada);
     if (!pendientes.length) return false;
     const proxima = pendientes.sort((a,b) => a.fecha.localeCompare(b.fecha))[0];
@@ -746,7 +973,7 @@ function renderDashboard() {
 
   // Alertas de vencimiento de tarjetas
   const today = new Date().getDate();
-  cards.forEach(c => {
+  cards.filter(c=>!c.deleted).forEach(c => {
     if (!c.venc || c.saldo <= 0) return;
     const daysUntil = c.venc >= today ? c.venc - today : (31 - today) + c.venc;
     if (daysUntil === 0) alerts.unshift({ t: 'danger', i: 'ti-credit-card', msg: `<b>¡Hoy vence ${c.name}!</b> Saldo pendiente: ${fmt(c.saldo)}` });
@@ -756,7 +983,7 @@ function renderDashboard() {
 
   // Alertas de vencimiento de préstamos (basadas en próxima cuota pendiente)
   const hoyDate = new Date(); hoyDate.setHours(0,0,0,0);
-  loans.forEach(l => {
+  loans.filter(l=>!l.deleted).forEach(l => {
     const pendientes = (l.installments || []).filter(c => !c.pagada).sort((a,b) => a.fecha.localeCompare(b.fecha));
     const proxima = pendientes[0];
     if (!proxima) return;
@@ -845,8 +1072,10 @@ function saveTx() {
   const cat = chip ? chip.textContent : 'Otros';
 
   if (editingTxId) {
-    // Modo edición: actualiza el movimiento existente en su lugar
-    txs = txs.map(t => t.id === editingTxId ? { ...t, type: currentType, desc, amount, date, cat, note } : t);
+    // Modo edición: actualiza el movimiento existente y marca updatedAt
+    txs = txs.map(t => t.id === editingTxId
+      ? window.syncEngine.touch({ ...t, type: currentType, desc, amount, date, cat, note })
+      : t);
     toast('✓ Movimiento actualizado');
     editingTxId = null;
     resetAddForm();
@@ -854,7 +1083,7 @@ function saveTx() {
     renderHistory();
     goto('history');
   } else {
-    const tx = { id: Date.now(), type: currentType, desc, amount, date, cat, note };
+    const tx = window.syncEngine.stampRecord({ id: Date.now(), type: currentType, desc, amount, date, cat, note });
     txs.unshift(tx);
     toast('✓ Movimiento guardado');
     resetAddForm();
@@ -901,7 +1130,9 @@ function editTx(id) {
 
 function deleteTx(id) {
   if (!confirm('¿Eliminar este movimiento?')) return;
-  txs = txs.filter(t => t.id !== id);
+  // Tombstone: marcamos deleted=true en vez de borrar, para que el borrado
+  // se propague a los otros dispositivos en la próxima sincronización.
+  txs = txs.map(t => t.id === id ? window.syncEngine.touch({ ...t, deleted: true }) : t);
   persist();
   renderHistory();
   toast('Movimiento eliminado');
@@ -917,7 +1148,7 @@ function setFilter(btn) {
 function renderHistory() {
   // Poblar categorías disponibles (todas las usadas alguna vez en transacciones)
   const catSel = document.getElementById('h-cat');
-  const usedCats = [...new Set(txs.map(t => t.cat))].sort();
+  const usedCats = [...new Set(activeTxs().map(t => t.cat))].sort();
   const curCat = catSel.value;
   catSel.innerHTML = '<option value="">Todas las categorías</option>' +
     usedCats.map(c => `<option value="${c}" ${c === curCat ? 'selected' : ''}>${c}</option>`).join('');
@@ -926,7 +1157,7 @@ function renderHistory() {
   const dateTo = document.getElementById('h-date-to').value;
   const cat = document.getElementById('h-cat').value;
 
-  let list = [...txs];
+  let list = [...activeTxs()];
 
   // Filtro por tipo (gasto/ingreso/etc)
   if (histFilter !== 'all') list = list.filter(t => t.type === histFilter);
@@ -994,6 +1225,7 @@ function renderBudget() {
 function deleteBudget(cat) {
   if (!confirm(`¿Eliminar el presupuesto de "${cat}"?`)) return;
   delete budgets[cat];
+  touchBlob('budgets');
   persist();
   renderBudget();
   toast(`✓ Presupuesto de ${cat} eliminado`);
@@ -1004,6 +1236,7 @@ function saveBudget() {
   const amount = parseFloat(document.getElementById('b-amount').value);
   if (!amount || amount <= 0) { toast('⚠️ Ingresá un monto válido'); return; }
   budgets[cat] = amount;
+  touchBlob('budgets');
   persist();
   document.getElementById('b-amount').value = '';
   renderBudget();
@@ -1012,7 +1245,7 @@ function saveBudget() {
 
 // ─── ANALYSIS ────────────────────────────────────────────────────────────────
 function renderAnalysis() {
-  const months = [...new Set(txs.map(t => t.date.slice(0, 7)))].sort().slice(-6);
+  const months = [...new Set(activeTxs().map(t => t.date.slice(0, 7)))].sort().slice(-6);
   if (!months.length) months.push(curMonth());
   const incData = months.map(m => monthStats(m).income);
   const expData = months.map(m => monthStats(m).expense);
@@ -1112,13 +1345,10 @@ function handleSync() {
       </div>
       <div class="alert info" style="margin-bottom:14px">
         <i class="ti ti-refresh"></i>
-        <div class="alert-body" style="font-size:12px">Sync automático activo: cada cambio se sube solo (con unos segundos de margen), y hay un respaldo cada minuto mientras la app esté abierta.</div>
+        <div class="alert-body" style="font-size:12px">Sincronización automática por fusión: cada cambio se sube solo y la app baja los cambios de otros dispositivos cada 30 segundos. Los datos se combinan sin pisarse.</div>
       </div>
       <button class="btn primary" style="margin-bottom:8px" onclick="doSyncToSheets()">
-        <i class="ti ti-cloud-upload"></i> Subir datos a Google Sheets
-      </button>
-      <button class="btn" style="margin-bottom:8px;border-color:#4285f4;color:#4285f4" onclick="doImportFromSheets()">
-        <i class="ti ti-cloud-download"></i> Bajar datos desde Google Sheets
+        <i class="ti ti-refresh"></i> Sincronizar ahora
       </button>
       <button class="btn" style="margin-bottom:14px;color:var(--text-muted)" onclick="gAuth.signOut();stopAutoSyncInterval();updateSyncBtn();handleSync()">
         <i class="ti ti-logout"></i> Desconectar Apps Script
@@ -1159,167 +1389,353 @@ function handleSync() {
   document.getElementById('drive-overlay').classList.add('open');
 }
 
-// ─── AUTO-SYNC ────────────────────────────────────────────────────────────────
-const AUTO_SYNC_DEBOUNCE_MS = 8000;   // espera 8s de inactividad tras un cambio antes de subir
-const AUTO_SYNC_INTERVAL_MS = 60000;  // respaldo cada 1 minuto
-let _autoSyncTimer = null;
-let _autoSyncInterval = null;
-let _autoSyncing = false;
+// ─── MOTOR DE SINCRONIZACIÓN POR FUSIÓN (merge multi-dispositivo) ────────────
+// Reemplaza el modelo viejo "subir todo y pisar" por una fusión registro-por-
+// registro con timestamps y tombstones. Ver sync-engine.js para el detalle.
+const AUTO_SYNC_DEBOUNCE_MS = 5000;    // tras un cambio, espera 5s de quietud antes de sincronizar
+const POLL_INTERVAL_MS = 30000;        // consulta el Sheet cada 30s para traer cambios de otros dispositivos
+let _syncTimer = null;
+let _pollInterval = null;
+let _syncing = false;
 let _pendingChanges = false;
+let _blobTimestamps = JSON.parse(localStorage.getItem('mf_blob_ts') || '{}');
 
+// Campos que definen "igualdad" de cada tipo de registro (para detectar conflictos)
+const TX_KEYS = ['date','type','desc','cat','amount','note'];
+const CARD_KEYS = ['name','saldo','limite','cierre','venc','minpct','payments'];
+const LOAN_KEYS = ['name','total','tasa','dia','installments'];
+
+function _saveBlobTimestamps() {
+  localStorage.setItem('mf_blob_ts', JSON.stringify(_blobTimestamps));
+}
+
+// Marca que hubo un cambio local y programa una sincronización con debounce
 function scheduleAutoSync() {
   _pendingChanges = true;
-  // No dispara nada si todavía no se completó la sincronización inicial de este
-  // dispositivo (ver saveGasConfig) — evita que un dispositivo recién conectado
-  // suba datos vacíos/demo antes de que el usuario decida bajar lo existente.
   if (!window.gAuth || !window.gAuth.isSignedIn() || !localStorage.getItem('mf_initial_sync_done')) return;
-  clearTimeout(_autoSyncTimer);
-  _autoSyncTimer = setTimeout(runAutoSync, AUTO_SYNC_DEBOUNCE_MS);
+  clearTimeout(_syncTimer);
+  _syncTimer = setTimeout(runSync, AUTO_SYNC_DEBOUNCE_MS);
 }
 
 function startAutoSyncInterval() {
-  clearInterval(_autoSyncInterval);
-  _autoSyncInterval = setInterval(() => {
-    if (window.gAuth && window.gAuth.isSignedIn() && _pendingChanges && localStorage.getItem('mf_initial_sync_done')) runAutoSync();
-  }, AUTO_SYNC_INTERVAL_MS);
+  clearInterval(_pollInterval);
+  // Polling: baja cambios de otros dispositivos cada 30s, aunque no haya cambios locales
+  _pollInterval = setInterval(() => {
+    if (window.gAuth && window.gAuth.isSignedIn() && localStorage.getItem('mf_initial_sync_done')) runSync();
+  }, POLL_INTERVAL_MS);
 }
 
 function stopAutoSyncInterval() {
-  clearInterval(_autoSyncInterval);
-  clearTimeout(_autoSyncTimer);
+  clearInterval(_pollInterval);
+  clearTimeout(_syncTimer);
 }
 
-async function runAutoSync() {
-  if (_autoSyncing || !window.gAuth || !window.gAuth.isSignedIn()) return;
+// Actualiza el timestamp de un blob de settings cuando cambia
+function touchBlob(key) {
+  _blobTimestamps[key] = window.syncEngine.now();
+  _saveBlobTimestamps();
+}
+
+// Arma el payload de blobs (presupuestos, config, colores, categorías)
+function _buildBlobs() {
+  return {
+    budgets:     { updatedAt: _blobTimestamps.budgets || 0,     data: budgets },
+    alertConfig: { updatedAt: _blobTimestamps.alertConfig || 0, data: alertConfig },
+    userColors:  { updatedAt: _blobTimestamps.userColors || 0,  data: userColors },
+    customCats:  { updatedAt: _blobTimestamps.customCats || 0,  data: customCats }
+  };
+}
+
+// Convierte transacciones locales al formato de sync (con id/updatedAt/deleted)
+function _txToRecords() {
+  return txs.map(t => ({
+    id: String(t.id),
+    updatedAt: t.updatedAt || window.syncEngine.now(),
+    deleted: !!t.deleted,
+    fecha: t.date, tipo: t.type, desc: t.desc, categoria: t.cat,
+    monto: t.amount, nota: t.note || ''
+  }));
+}
+function _recordsToTx(records) {
+  return records.map(r => ({
+    id: isNaN(Number(r.id)) ? r.id : Number(r.id),
+    updatedAt: r.updatedAt, deleted: !!r.deleted,
+    date: r.fecha, type: r.tipo, desc: r.desc, cat: r.categoria,
+    amount: Number(r.monto) || 0, note: r.nota || ''
+  }));
+}
+
+function _cardToRecords() {
+  return cards.map(c => ({
+    id: String(c.id), updatedAt: c.updatedAt || window.syncEngine.now(), deleted: !!c.deleted,
+    name: c.name, saldo: c.saldo, limite: c.limite || '', cierre: c.cierre || '',
+    venc: c.venc || '', minpct: c.minpct || '', payments: JSON.stringify(c.payments || [])
+  }));
+}
+function _recordsToCards(records) {
+  return records.map(r => ({
+    id: r.id, updatedAt: r.updatedAt, deleted: !!r.deleted,
+    name: r.name, saldo: Number(r.saldo) || 0, limite: Number(r.limite) || 0,
+    cierre: r.cierre || null, venc: r.venc || null, minpct: Number(r.minpct) || 5,
+    payments: (() => { try { return JSON.parse(r.payments || '[]'); } catch(e) { return []; } })()
+  }));
+}
+
+function _loanToRecords() {
+  return loans.map(l => ({
+    id: String(l.id), updatedAt: l.updatedAt || window.syncEngine.now(), deleted: !!l.deleted,
+    name: l.name, total: l.total || 0, saldo: l.saldo || 0, vencido: l.vencido || 0,
+    tasa: l.tasa || 0, installments: JSON.stringify(l.installments || [])
+  }));
+}
+function _recordsToLoans(records) {
+  return records.map(r => ({
+    id: r.id, updatedAt: r.updatedAt, deleted: !!r.deleted,
+    name: r.name, total: Number(r.total) || 0, saldo: Number(r.saldo) || 0,
+    vencido: Number(r.vencido) || 0, tasa: Number(r.tasa) || 0,
+    installments: Array.isArray(r.installments) ? r.installments : (() => { try { return JSON.parse(r.installments || '[]'); } catch(e) { return []; } })()
+  }));
+}
+
+// ── Ciclo de sincronización principal ────────────────────────────────────────
+async function runSync() {
+  if (_syncing || !window.gAuth || !window.gAuth.isSignedIn()) return;
   if (!navigator.onLine) { showSyncIndicator('offline'); return; }
-  _autoSyncing = true;
+  _syncing = true;
   showSyncIndicator('syncing');
+
   try {
-    await window.gAuth.syncToSheets(txs, budgets, cards, loans, alertConfig);
-    localStorage.setItem('mf_last_export', new Date().toISOString());
+    const lastSynced = window.syncEngine.getLastSyncedAt();
+
+    // 1. Enviar cambios locales + recibir estado autoritativo del servidor
+    const resp = await window.gAuth.mergeSync({
+      transactions: _txToRecords(),
+      cards: _cardToRecords(),
+      loans: _loanToRecords(),
+      blobs: _buildBlobs()
+    });
+
+    // 2. Fusionar transacciones con lo que devolvió el servidor + detectar conflictos
+    const remoteTx = resp.transactions || [];
+    const txMerge = window.syncEngine.mergeCollection(_txToRecords(), remoteTx, lastSynced, ['fecha','tipo','desc','categoria','monto','nota']);
+    const cardMerge = window.syncEngine.mergeCollection(_cardToRecords(), resp.cards || [], lastSynced, ['name','saldo','limite','cierre','venc','minpct']);
+    const loanMerge = window.syncEngine.mergeCollection(_loanToRecords(), resp.loans || [], lastSynced, ['name','total','tasa','installments']);
+
+    const allConflicts = [
+      ...txMerge.conflicts.map(c => ({ ...c, kind: 'transacción', render: r => `${r.desc} · ${r.categoria} · $${r.monto} · ${r.fecha}` })),
+      ...cardMerge.conflicts.map(c => ({ ...c, kind: 'tarjeta', render: r => `${r.name} · saldo $${r.saldo}` })),
+      ...loanMerge.conflicts.map(c => ({ ...c, kind: 'préstamo', render: r => `${r.name} · saldo $${r.saldo}` }))
+    ];
+
+    // 3. Aplicar la fusión al estado local
+    txs = _recordsToTx(txMerge.merged);
+    cards = _recordsToCards(cardMerge.merged);
+    loans = _recordsToLoans(loanMerge.merged);
+
+    // 4. Fusionar blobs de settings (el más nuevo gana en bloque)
+    const rb = resp.blobs || {};
+    _applyBlob('budgets', rb.budgets, v => { budgets = v; });
+    _applyBlob('alertConfig', rb.alertConfig, v => { alertConfig = v; });
+    _applyBlob('userColors', rb.userColors, v => { userColors = v; });
+    _applyBlob('customCats', rb.customCats, v => { customCats = v; });
+
+    // 5. Persistir SIN volver a disparar sync, y marcar el tiempo de sincronización
+    _persistLocal();
+    window.syncEngine.setLastSyncedAt(resp.serverTime || window.syncEngine.now());
     _pendingChanges = false;
-    showSyncIndicator('synced');
+
+    // 6. Refrescar la pantalla visible
+    _refreshCurrentScreen();
+
+    // 7. Si hubo conflictos, mostrar el modal de resolución
+    if (allConflicts.length) {
+      showConflictModal(allConflicts);
+      showSyncIndicator('conflict');
+    } else {
+      showSyncIndicator('synced');
+    }
   } catch(e) {
     showSyncIndicator('error');
-    console.warn('Auto-sync falló:', e.message);
+    console.warn('Sync falló:', e.message);
   }
-  _autoSyncing = false;
+  _syncing = false;
 }
 
-// Pequeño indicador visual en el botón de Datos (sin interrumpir al usuario)
+// ── Resolución de conflictos ─────────────────────────────────────────────────
+let _pendingConflicts = [];
+
+function showConflictModal(conflicts) {
+  _pendingConflicts = conflicts;
+  const html = conflicts.map((c, i) => `
+    <div style="border:0.5px solid var(--border);border-radius:var(--radius-sm);padding:12px;margin-bottom:10px">
+      <div style="font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">${c.kind}</div>
+      <label style="display:flex;gap:10px;align-items:flex-start;padding:8px;border-radius:8px;cursor:pointer;margin-bottom:6px">
+        <input type="radio" name="conflict-${i}" value="local" checked style="margin-top:3px">
+        <div>
+          <div style="font-size:13px;font-weight:600">Este dispositivo</div>
+          <div style="font-size:12px;color:var(--text-muted)">${c.render(c.local)}</div>
+        </div>
+      </label>
+      <label style="display:flex;gap:10px;align-items:flex-start;padding:8px;border-radius:8px;cursor:pointer">
+        <input type="radio" name="conflict-${i}" value="remote" style="margin-top:3px">
+        <div>
+          <div style="font-size:13px;font-weight:600">Otro dispositivo</div>
+          <div style="font-size:12px;color:var(--text-muted)">${c.render(c.remote)}</div>
+        </div>
+      </label>
+    </div>`).join('');
+  document.getElementById('conflict-list').innerHTML = html;
+  document.getElementById('conflict-modal').classList.add('open');
+}
+
+function applyConflictResolutions() {
+  _pendingConflicts.forEach((c, i) => {
+    const choice = document.querySelector(`input[name="conflict-${i}"]:checked`)?.value || 'local';
+    const winner = choice === 'local' ? c.local : c.remote;
+    // Forzar que el elegido gane: le ponemos updatedAt = ahora para que prevalezca
+    const stamped = window.syncEngine.touch({ ...winner });
+    if (c.kind === 'transacción') {
+      txs = txs.map(t => String(t.id) === String(stamped.id)
+        ? { id: isNaN(Number(stamped.id)) ? stamped.id : Number(stamped.id), updatedAt: stamped.updatedAt, deleted: !!stamped.deleted, date: stamped.fecha, type: stamped.tipo, desc: stamped.desc, cat: stamped.categoria, amount: Number(stamped.monto)||0, note: stamped.nota||'' }
+        : t);
+    } else if (c.kind === 'tarjeta') {
+      cards = cards.map(x => String(x.id) === String(stamped.id) ? _recordsToCards([stamped])[0] : x);
+    } else if (c.kind === 'préstamo') {
+      loans = loans.map(x => String(x.id) === String(stamped.id) ? _recordsToLoans([stamped])[0] : x);
+    }
+  });
+  _pendingConflicts = [];
+  document.getElementById('conflict-modal').classList.remove('open');
+  _persistLocal();
+  _refreshCurrentScreen();
+  toast('✓ Conflictos resueltos — sincronizando...');
+  runSync(); // sube las decisiones para que se propaguen
+}
+
+// Aplica un blob remoto si es más nuevo que el local
+function _applyBlob(key, remoteBlob, setter) {
+  if (!remoteBlob) return;
+  const localTs = _blobTimestamps[key] || 0;
+  if ((remoteBlob.updatedAt || 0) > localTs) {
+    setter(remoteBlob.data);
+    _blobTimestamps[key] = remoteBlob.updatedAt;
+    _saveBlobTimestamps();
+  }
+}
+
+// Persiste a localStorage SIN disparar auto-sync (evita loops)
+function _persistLocal() {
+  localStorage.setItem('mf_txs', JSON.stringify(txs));
+  localStorage.setItem('mf_budgets', JSON.stringify(budgets));
+  localStorage.setItem('mf_cards', JSON.stringify(cards));
+  localStorage.setItem('mf_loans', JSON.stringify(loans));
+  localStorage.setItem('mf_custom_cats', JSON.stringify(customCats));
+  localStorage.setItem('mf_colors', JSON.stringify(userColors));
+  localStorage.setItem('mf_alert_config', JSON.stringify(alertConfig));
+}
+
+// Refresca la pantalla que el usuario está viendo ahora
+function _refreshCurrentScreen() {
+  const active = document.querySelector('.screen.active');
+  if (!active) { renderDashboard(); return; }
+  const id = active.id.replace('s-', '');
+  if (id === 'dashboard') renderDashboard();
+  else if (id === 'cards') renderCards();
+  else if (id === 'loans') renderLoans();
+  else if (id === 'balance') renderBalance();
+  else if (id === 'budget') renderBudget();
+  else if (id === 'analysis') renderAnalysis();
+  else if (id === 'history') renderHistory();
+  updateAlertBadges();
+}
+
+// Indicador visual del estado de sync en el botón "Datos"
 function showSyncIndicator(state) {
-  const btn = document.getElementById('sync-btn');
   const label = document.getElementById('sync-label');
-  if (!btn || !label) return;
-  if (state === 'syncing') {
-    label.innerHTML = '<i class="ti ti-loader-2" style="animation:spin 1s linear infinite;font-size:12px"></i> Sync...';
-  } else if (state === 'synced') {
-    label.textContent = '✓ Drive';
-    btn.classList.add('synced');
-  } else if (state === 'offline') {
-    label.textContent = 'Sin conexión';
-  } else if (state === 'error') {
-    label.textContent = '⚠️ Error sync';
-  }
+  if (!label) return;
+  if (state === 'syncing')      label.innerHTML = '<i class="ti ti-loader-2" style="animation:spin 1s linear infinite;font-size:12px"></i>';
+  else if (state === 'synced')  label.textContent = '✓';
+  else if (state === 'offline') label.textContent = '⚡';
+  else if (state === 'error')   label.textContent = '⚠️';
+  else if (state === 'conflict')label.textContent = '⚠️';
 }
 
-// Sincronizar también cuando vuelve la conexión a internet
-window.addEventListener('online', () => {
-  if (window.gAuth && window.gAuth.isSignedIn() && _pendingChanges) runAutoSync();
-});
-
-// Sincronizar al volver a la pestaña/app después de estar en segundo plano
+// Sincronizar al recuperar conexión o al volver a la pestaña
+window.addEventListener('online', () => { if (window.gAuth && window.gAuth.isSignedIn()) runSync(); });
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' && window.gAuth && window.gAuth.isSignedIn() && _pendingChanges) {
-    runAutoSync();
-  }
+  if (document.visibilityState === 'visible' && window.gAuth && window.gAuth.isSignedIn() && localStorage.getItem('mf_initial_sync_done')) runSync();
 });
 
+// ── Sync manual (botón) ──────────────────────────────────────────────────────
 async function doSyncToSheets() {
   const btn = event.target;
   btn.disabled = true;
   btn.innerHTML = '<i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i> Sincronizando...';
   try {
-    const url = await window.gAuth.syncToSheets(txs, budgets, cards, loans, alertConfig);
-    localStorage.setItem('mf_last_export', new Date().toISOString());
     localStorage.setItem('mf_initial_sync_done', 'true');
-    _pendingChanges = false;
-    updateSyncBtn();
+    await runSync();
     closeDrive();
-    toast('✓ Datos subidos a Google Sheets');
-    if (confirm('¿Querés abrir tu Google Sheet ahora?')) window.open(url, '_blank');
-  } catch(e) {
-    toast('⚠️ Error: ' + e.message);
-    btn.disabled = false;
-    btn.innerHTML = '<i class="ti ti-cloud-upload"></i> Subir datos a Google Sheets';
-  }
-}
-
-async function doImportFromSheets() {
-  const btn = event.target;
-  btn.disabled = true;
-  btn.innerHTML = '<i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i> Descargando...';
-  try {
-    const data = await window.gAuth.importFromSheets();
-    const n = (data.transactions || []).length;
-    if (!confirm(`Se encontraron ${n} movimientos en tu Google Sheet.\n\n¿Reemplazar los datos de este dispositivo con esos?`)) {
-      btn.disabled = false;
-      btn.innerHTML = '<i class="ti ti-cloud-download"></i> Bajar datos desde Google Sheets';
-      return;
-    }
-    txs = data.transactions || [];
-    budgets = data.budgets || {};
-    if (data.cards && data.cards.length) cards = data.cards;
-    if (data.loans && data.loans.length) loans = data.loans;
-    persist();
-    localStorage.setItem('mf_initial_sync_done', 'true');
-    renderDashboard();
-    closeDrive();
-    toast(`✓ ${n} movimientos importados desde Sheets`);
+    toast('✓ Sincronizado con Google Sheets');
   } catch(e) {
     toast('⚠️ Error: ' + e.message);
   }
   btn.disabled = false;
-  btn.innerHTML = '<i class="ti ti-cloud-download"></i> Bajar datos desde Google Sheets';
+  btn.innerHTML = '<i class="ti ti-cloud-upload"></i> Sincronizar ahora';
 }
 
+// ── Primera conexión: traer lo que ya existe en el Sheet ─────────────────────
 async function saveGasConfig() {
   const url = document.getElementById('gas-url').value.trim();
   const secret = document.getElementById('gas-secret').value.trim();
   if (!url || !secret) { toast('⚠️ Completá la URL y la clave'); return; }
   if (!url.includes('script.google.com')) { toast('⚠️ La URL no parece ser de Apps Script'); return; }
 
-  localStorage.setItem('mf_gas_config', JSON.stringify({ url, secret, label: 'Apps Script conectado' }));
+  window.gAuth.setConfig(url, secret, 'Apps Script conectado');
   updateSyncBtn();
+  toast('Conectado. Trayendo datos existentes del Sheet...');
 
-  // CRÍTICO: antes de activar el auto-sync (que sube datos), preguntamos si
-  // este dispositivo debería bajar lo que ya existe en el Sheet. Si no
-  // preguntamos esto, un dispositivo nuevo con datos vacíos podría
-  // sobreescribir el Sheet con la nada antes de que el usuario llegue a
-  // bajar manualmente.
-  toast('Conectado. Revisando si hay datos existentes en el Sheet...');
   try {
-    const data = await window.gAuth.importFromSheets();
-    const n = (data.transactions || []).length;
-    if (n > 0 && confirm(`Tu Google Sheet ya tiene ${n} movimiento(s) cargado(s) desde otro dispositivo.\n\n¿Querés traerlos a este dispositivo ahora? (Recomendado la primera vez que conectás un dispositivo nuevo)`)) {
-      txs = data.transactions || [];
-      budgets = data.budgets || {};
-      if (data.cards && data.cards.length) cards = data.cards;
-      if (data.loans && data.loans.length) loans = data.loans;
-      persist();
+    const data = await window.gAuth.readAll();
+    const remoteTx = data.transactions || [];
+    const nRemote = remoteTx.filter(t => !t.deleted).length;
+    const nLocal = txs.filter(t => !t.deleted).length;
+
+    // Si hay datos en el Sheet, los fusionamos con lo local (nunca pisamos)
+    if (nRemote > 0) {
+      const merged = window.syncEngine.mergeCollection(_txToRecords(), remoteTx, 0, ['fecha','tipo','desc','categoria','monto','nota']);
+      txs = _recordsToTx(merged.merged);
+      const cardM = window.syncEngine.mergeCollection(_cardToRecords(), data.cards || [], 0, ['name','saldo']);
+      cards = _recordsToCards(cardM.merged);
+      const loanM = window.syncEngine.mergeCollection(_loanToRecords(), data.loans || [], 0, ['name','total']);
+      loans = _recordsToLoans(loanM.merged);
+
+      const rb = data.blobs || {};
+      if (rb.budgets) { budgets = rb.budgets.data; _blobTimestamps.budgets = rb.budgets.updatedAt; }
+      if (rb.alertConfig) { alertConfig = rb.alertConfig.data; _blobTimestamps.alertConfig = rb.alertConfig.updatedAt; }
+      if (rb.userColors) { userColors = rb.userColors.data; _blobTimestamps.userColors = rb.userColors.updatedAt; }
+      if (rb.customCats) { customCats = rb.customCats.data; _blobTimestamps.customCats = rb.customCats.updatedAt; }
+      _saveBlobTimestamps();
+
+      _persistLocal();
+      window.syncEngine.setLastSyncedAt(data.serverTime || window.syncEngine.now());
       renderDashboard();
-      toast(`✓ ${n} movimientos importados desde tu Sheet`);
+      toast(`✓ ${nRemote} movimientos traídos del Sheet (fusionados con los ${nLocal} de este equipo)`);
+    } else {
+      toast('Sheet vacío. Se subirán los datos de este dispositivo.');
     }
   } catch(e) {
-    console.warn('No se pudo verificar datos existentes en el Sheet:', e.message);
+    console.warn('No se pudo leer el Sheet al conectar:', e.message);
+    toast('⚠️ Conectado, pero no se pudo leer el Sheet: ' + e.message);
   }
 
-  localStorage.setItem('mf_initial_sync_done', 'true'); // a partir de ahora, el auto-sync puede subir libremente
+  localStorage.setItem('mf_initial_sync_done', 'true');
   startAutoSyncInterval();
-  handleSync(); // refresca el modal con el estado conectado
+  runSync(); // sube lo local y deja todo consistente
+  handleSync();
 }
 
 function closeDrive() { document.getElementById('drive-overlay').classList.remove('open'); }
+
 
 // ── EXPORT XLSX ───────────────────────────────────────────────────────────────
 function exportXLSX() {
@@ -1329,7 +1745,7 @@ function exportXLSX() {
 
   // Hoja 1: Transacciones
   const txRows = [['Fecha','Tipo','Descripción','Categoría','Monto','Nota']];
-  [...txs].sort((a,b) => b.date.localeCompare(a.date)).forEach(t =>
+  [...activeTxs()].sort((a,b) => b.date.localeCompare(a.date)).forEach(t =>
     txRows.push([t.date, LABELS[t.type] || t.type, t.desc, t.cat, t.amount, t.note || ''])
   );
   const wsTx = XLSX.utils.aoa_to_sheet(txRows);
@@ -1344,10 +1760,10 @@ function exportXLSX() {
   XLSX.utils.book_append_sheet(wb, wsBudget, 'Presupuestos');
 
   // Hoja 3: Resumen mensual
-  const months = [...new Set(txs.map(t => t.date.slice(0,7)))].sort();
+  const months = [...new Set(activeTxs().map(t => t.date.slice(0,7)))].sort();
   const sumRows = [['Mes','Ingresos','Gastos','Deudas','Ahorros','Inversiones','Balance neto']];
   months.forEach(m => {
-    const ts = txs.filter(t => t.date.startsWith(m));
+    const ts = activeTxs().filter(t => t.date.startsWith(m));
     const inc  = ts.filter(t => t.type==='income').reduce((s,t)=>s+t.amount,0);
     const exp  = ts.filter(t => t.type==='expense').reduce((s,t)=>s+t.amount,0);
     const dbt  = ts.filter(t => t.type==='debt').reduce((s,t)=>s+t.amount,0);
@@ -1378,14 +1794,14 @@ function exportXLSX() {
 
   // Hoja 5: Tarjetas de crédito
   const cRows = [['Nombre','Saldo ($)','Límite ($)','Día cierre','Día vencimiento','Pago mín %']];
-  cards.forEach(c => cRows.push([c.name, c.saldo, c.limite||'', c.cierre||'', c.venc||'', c.minpct||'']));
+  cards.filter(c=>!c.deleted).forEach(c => cRows.push([c.name, c.saldo, c.limite||'', c.cierre||'', c.venc||'', c.minpct||'']));
   const wsCards = XLSX.utils.aoa_to_sheet(cRows);
   wsCards['!cols'] = [{wch:20},{wch:14},{wch:14},{wch:12},{wch:16},{wch:12}];
   XLSX.utils.book_append_sheet(wb, wsCards, 'Tarjetas');
 
   // Hoja 6: Préstamos (resumen)
   const lRows = [['Nombre','Total ($)','Saldo restante ($)','Vencido sin pagar ($)','Cant. cuotas','Cuotas pagadas','Tasa %']];
-  loans.forEach(l => {
+  loans.filter(l=>!l.deleted).forEach(l => {
     const insts = l.installments || [];
     const pagadas = insts.filter(c => c.pagada).length;
     lRows.push([l.name, l.total||'', l.saldo||0, l.vencido||0, insts.length, pagadas, l.tasa||'']);
@@ -1396,7 +1812,7 @@ function exportXLSX() {
 
   // Hoja 7: Cuotas de Préstamos (detalle, una fila por cuota)
   const cuotasRows = [['Préstamo','N° Cuota','Monto ($)','Capital ($)','Interés ($)','Fecha vencimiento','Pagada']];
-  loans.forEach(l => (l.installments || []).forEach(c => {
+  loans.filter(l=>!l.deleted).forEach(l => (l.installments || []).forEach(c => {
     cuotasRows.push([l.name, c.numero, c.monto, c.capital ?? '', c.interes ?? '', c.fecha, c.pagada ? 'SI' : 'NO']);
   }));
   const wsCuotas = XLSX.utils.aoa_to_sheet(cuotasRows);
@@ -1530,11 +1946,11 @@ function _importXLSX(file) {
           date = `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
         }
 
-        imported.push({
+        imported.push(window.syncEngine.stampRecord({
           id: Date.now() + i,
           type: typeMap[typeRaw] || 'expense',
           desc, cat, amount, date, note
-        });
+        }));
       }
 
       if (!imported.length) throw new Error('No se encontraron filas válidas en la hoja');
@@ -1548,6 +1964,7 @@ function _importXLSX(file) {
           const [cat, lim] = brows[i];
           if (cat && lim) budgets[String(cat).trim()] = parseFloat(lim) || 0;
         }
+        touchBlob('budgets');
       }
 
       if (!confirm(`¿Importar ${imported.length} movimientos desde "${file.name}"?\n\nEsto reemplazará los movimientos actuales.`))
@@ -1569,10 +1986,11 @@ function _importXLSX(file) {
 // ─── TARJETAS DE CRÉDITO ──────────────────────────────────────────────────────
 function renderCards() {
   const el = document.getElementById('cards-list');
-  if (!cards.length) {
+  const live = cards.filter(c => !c.deleted);
+  if (!live.length) {
     el.innerHTML = '<div class="empty" style="padding:30px 20px"><i class="ti ti-credit-card"></i><p>No tenés tarjetas cargadas</p></div>';
   } else {
-    el.innerHTML = cards.map(c => cardHTML(c)).join('');
+    el.innerHTML = live.map(c => cardHTML(c)).join('');
   }
   // Inicializar simulador con mes actual
   const simStart = document.getElementById('sim-start');
@@ -1666,8 +2084,8 @@ function saveCard() {
     minpct: parseFloat(document.getElementById('cm-minpct').value) || 5,
     payments: id ? (cards.find(c => c.id === id)?.payments || []) : []
   };
-  if (id) cards = cards.map(c => c.id === id ? data : c);
-  else cards.push(data);
+  if (id) cards = cards.map(c => c.id === id ? window.syncEngine.touch({ ...c, ...data }) : c);
+  else cards.push(window.syncEngine.stampRecord(data));
   persist();
   closeCardModal();
   renderCards();
@@ -1678,7 +2096,7 @@ function saveCard() {
 function deleteCard(id) {
   const c = cards.find(x => x.id === id);
   if (!confirm(`¿Eliminar la tarjeta "${c?.name}"?`)) return;
-  cards = cards.filter(x => x.id !== id);
+  cards = cards.map(x => x.id === id ? window.syncEngine.touch({ ...x, deleted: true }) : x);
   persist();
   renderCards();
   updateCardsBadge();
@@ -1707,7 +2125,7 @@ function saveCardPayment() {
     if (c.id !== cardId) return c;
     const newSaldo = Math.max(0, c.saldo - amount);
     const payments = [...(c.payments || []), { amount, date, note }];
-    return { ...c, saldo: newSaldo, payments };
+    return window.syncEngine.touch({ ...c, saldo: newSaldo, payments });
   });
   persist();
   closePayModal();
@@ -1826,14 +2244,15 @@ function migrateOldLoans() {
 
 function renderLoans() {
   const el = document.getElementById('loans-list');
-  if (!loans.length) {
+  const live = loans.filter(l => !l.deleted);
+  if (!live.length) {
     el.innerHTML = '<div class="empty" style="padding:30px 20px"><i class="ti ti-building-bank"></i><p>No tenés préstamos cargados</p></div>';
     return;
   }
-  // Recalcular totales antes de pintar, por si hubo cambios en cuotas
-  loans = loans.map(recalcLoanTotals);
-  persist();
-  el.innerHTML = loans.map(l => loanHTML(l)).join('');
+  // Recalcular totales (saldo/vencido) solo en memoria para pintar; sin persistir
+  // acá para no disparar sync en cada render.
+  loans = loans.map(l => l.deleted ? l : recalcLoanTotals(l));
+  el.innerHTML = loans.filter(l => !l.deleted).map(l => loanHTML(l)).join('');
 }
 
 function loanHTML(l) {
@@ -1932,7 +2351,7 @@ function saveLoan() {
 
   if (id) {
     // Editar préstamo existente — solo actualiza datos generales, no toca cuotas ya creadas
-    loans = loans.map(l => l.id === id ? recalcLoanTotals({ ...l, name, total, tasa, dia }) : l);
+    loans = loans.map(l => l.id === id ? window.syncEngine.touch(recalcLoanTotals({ ...l, name, total, tasa, dia })) : l);
     toast('✓ Préstamo actualizado (las cuotas no se modificaron)');
   } else {
     // Nuevo préstamo — genera el cronograma completo
@@ -1949,7 +2368,7 @@ function saveLoan() {
       name, total: totalFinal, tasa, dia,
       installments
     });
-    loans.push(data);
+    loans.push(window.syncEngine.stampRecord(data));
     toast('✓ Préstamo creado con ' + installments.length + ' cuotas');
   }
 
@@ -1962,7 +2381,7 @@ function saveLoan() {
 function deleteLoan(id) {
   const l = loans.find(x => x.id === id);
   if (!confirm(`¿Eliminar "${l?.name}"? Se borran todas sus cuotas.`)) return;
-  loans = loans.filter(x => x.id !== id);
+  loans = loans.map(x => x.id === id ? window.syncEngine.touch({ ...x, deleted: true }) : x);
   persist();
   renderLoans();
   updateAlertBadges();
@@ -2004,7 +2423,7 @@ function toggleInstallmentPaid(loanId, index) {
   loans = loans.map(l => {
     if (l.id !== loanId) return l;
     const installments = l.installments.map((c, i) => i === index ? { ...c, pagada: !c.pagada } : c);
-    return recalcLoanTotals({ ...l, installments });
+    return window.syncEngine.touch(recalcLoanTotals({ ...l, installments }));
   });
   persist();
   openScheduleModal(loanId); // refresca el modal abierto
@@ -2088,7 +2507,7 @@ function saveInstallmentEdit() {
       else { delete updated.capital; delete updated.interes; }
       return updated;
     });
-    return recalcLoanTotals({ ...l, installments });
+    return window.syncEngine.touch(recalcLoanTotals({ ...l, installments }));
   });
   persist();
   closeInstallmentModal();
@@ -2101,7 +2520,7 @@ function saveInstallmentEdit() {
 // ─── BALANCE HISTÓRICO ────────────────────────────────────────────────────────
 function renderBalance() {
   const yearSel = document.getElementById('bal-year');
-  const allMonths = [...new Set(txs.map(t => t.date.slice(0, 7)))].sort().reverse();
+  const allMonths = [...new Set(activeTxs().map(t => t.date.slice(0, 7)))].sort().reverse();
   const allYears = [...new Set(allMonths.map(m => m.slice(0, 4)))];
   if (!allYears.length) allYears.push(new Date().getFullYear().toString());
 
@@ -2222,7 +2641,26 @@ function resetOnlyTxs() {
 }
 
 // ─── SETTINGS — COLORES Y CATEGORÍAS ─────────────────────────────────────────
+// ─── SELECTOR DE TEMA (claro / oscuro / auto) ────────────────────────────────
+function setTheme(mode) {
+  localStorage.setItem('mf_theme', mode);
+  document.documentElement.setAttribute('data-theme', mode);
+  // Ajustar el color de la barra de estado del navegador según el tema efectivo
+  const dark = mode === 'dark' || (mode === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', dark ? '#0B0D18' : '#4355C7');
+  highlightThemeButton();
+}
+
+function highlightThemeButton() {
+  const current = localStorage.getItem('mf_theme') || 'auto';
+  document.querySelectorAll('#theme-toggle button').forEach(b => {
+    b.classList.toggle('active', b.dataset.themeVal === current);
+  });
+}
+
 function renderSettings() {
+  highlightThemeButton();
   // Color pickers
   const types = ['expense','income','savings','debt','investment'];
   document.getElementById('color-pickers').innerHTML = types.map(t => `
@@ -2258,6 +2696,7 @@ function saveAlertConfig() {
     deficit: document.getElementById('alert-deficit').checked,
     days: parseInt(document.getElementById('alert-days').value) || 5
   };
+  touchBlob('alertConfig');
   persist();
 }
 
@@ -2265,6 +2704,7 @@ function updateColor(input) {
   const t = input.dataset.type;
   COLORS[t] = input.value;
   userColors[t] = input.value;
+  touchBlob('userColors');
   persist();
   toast('✓ Color actualizado');
 }
@@ -2272,6 +2712,7 @@ function updateColor(input) {
 function resetColors() {
   Object.assign(COLORS, DEFAULT_COLORS);
   Object.assign(userColors, DEFAULT_COLORS);
+  touchBlob('userColors');
   persist();
   renderSettings();
   toast('✓ Colores restaurados');
@@ -2286,6 +2727,7 @@ function addCustomCat() {
   }
   if (!customCats[type]) customCats[type] = [];
   customCats[type].push(name);
+  touchBlob('customCats');
   persist();
   document.getElementById('nc-name').value = '';
   renderCustomCatList();
@@ -2295,6 +2737,7 @@ function addCustomCat() {
 
 function deleteCustomCat(type, name) {
   customCats[type] = (customCats[type]||[]).filter(c => c !== name);
+  touchBlob('customCats');
   persist();
   renderCustomCatList();
   renderCats();
@@ -2362,6 +2805,7 @@ if (txs.length === 0) {
   persist();
 }
 migrateOldLoans(); // convierte préstamos de versiones anteriores al nuevo formato con cuotas
+migrateSyncMetadata(); // agrega id/updatedAt/deleted a registros de versiones anteriores
 renderDashboard();
 updateAlertBadges();
 updateSyncBtn();
@@ -2370,6 +2814,25 @@ if (window.gAuth && window.gAuth.isSignedIn()) {
   // asumimos que el usuario ya pasó por un sync consciente alguna vez — no lo bloqueamos.
   if (!localStorage.getItem('mf_initial_sync_done')) localStorage.setItem('mf_initial_sync_done', 'true');
   startAutoSyncInterval();
+  runSync(); // trae cambios de otros dispositivos apenas abre
+}
+
+// Asegura que todos los registros locales tengan los metadatos de sync
+function migrateSyncMetadata() {
+  let changed = false;
+  txs = txs.map(t => {
+    if (!t.id || t.updatedAt === undefined || t.deleted === undefined) { changed = true; return window.syncEngine.stampRecord(t); }
+    return t;
+  });
+  cards = cards.map(c => {
+    if (!c.id || c.updatedAt === undefined || c.deleted === undefined) { changed = true; return window.syncEngine.stampRecord(c); }
+    return c;
+  });
+  loans = loans.map(l => {
+    if (!l.id || l.updatedAt === undefined || l.deleted === undefined) { changed = true; return window.syncEngine.stampRecord(l); }
+    return l;
+  });
+  if (changed) _persistLocal();
 }
 
 // ─── SERVICE WORKER + DETECCIÓN DE ACTUALIZACIONES ───────────────────────────
