@@ -1,114 +1,147 @@
-# 💰 Mis Finanzas — PWA con sincronización multi-dispositivo
+# 💰 Mis Finanzas — PWA con Google directo
 
-App de finanzas personales instalable en Android (y usable en la PC), con **sincronización por fusión** a tu propio Google Sheet vía Apps Script — **sin Google Cloud, sin tarjeta de crédito, sin OAuth**.
-
----
-
-## ✨ Qué hay de nuevo en esta versión (v18)
-
-**Rediseño visual Material Design:**
-- Nuevo color de acento azul índigo, superficies con efecto vidrio esmerilado y transparencias.
-- **Modo claro / oscuro / automático** (seguí el sistema o forzá uno) desde Config → Apariencia.
-- Tarjetas con elevación, botones con capa de estado y animaciones suaves.
-
-**Motor de sincronización por fusión (desde v17):**
-
-- Cada movimiento, tarjeta y préstamo tiene una marca de tiempo propia (`updatedAt`).
-- Al sincronizar, los datos se **combinan** en vez de reemplazarse: si cargaste algo en el celu y algo distinto en la PC, **se conservan los dos**.
-- Los borrados se propagan correctamente (si borrás algo en un dispositivo, se borra en todos).
-- La app **baja los cambios de otros dispositivos cada 30 segundos** automáticamente, mientras está abierta.
-- Si el mismo registro se edita en dos dispositivos a la vez, la app **te avisa y elegís** con cuál quedarte (no se pierde nada silenciosamente).
-
-**Ya no hay botones separados de "Subir" y "Bajar".** Hay un único botón "Sincronizar ahora", y en general ni siquiera hace falta tocarlo: todo pasa solo.
+App de finanzas personales instalable (Android/PC) con sincronización multi-dispositivo directamente contra Google Sheets, sin backend propio, sin Apps Script, sin contraseñas.
 
 ---
 
-## 📦 Archivos del proyecto
+## ✨ Qué hay de nuevo en esta versión (v19)
+
+**Conexión directa con Google (OAuth).** Antes cada usuario tenía que abrir el Apps Script, pegar código y crear una clave secreta. Ahora simplemente aprieta **"Conectar con Google"** y la app hace todo:
+- Autoriza el permiso una sola vez.
+- La app **crea sola un Google Sheet** en su Drive personal (llamado "Mis Finanzas - Datos").
+- Empieza a sincronizar automáticamente.
+
+Los permisos que pide son mínimos: solo puede tocar el Sheet que ella misma crea (scope `drive.file`). No accede a otros archivos del Drive del usuario.
+
+Se mantienen: el motor de fusión multi-dispositivo (desde v17), el diseño Material claro/oscuro (desde v18) y todo lo demás.
+
+---
+
+## 🔧 PASO ÚNICO PARA EL DESARROLLADOR (Ivan)
+
+Esto se hace **una sola vez**. Después, las futuras actualizaciones de la app funcionan sin repetirlo.
+
+### 1. Crear el proyecto en Google Cloud
+
+1. Entrá a **[console.cloud.google.com](https://console.cloud.google.com)** con tu cuenta de Google.
+2. Arriba a la izquierda, en el selector de proyecto: **Nuevo proyecto**.
+3. Nombre: `Mis Finanzas` → **Crear**.
+4. Esperá unos segundos y seleccioná el proyecto recién creado.
+
+### 2. Habilitar las APIs que la app necesita
+
+1. Menú lateral → **APIs y servicios → Biblioteca**.
+2. Buscá **"Google Sheets API"** → **Habilitar**.
+3. Volvé a la Biblioteca. Buscá **"Google Drive API"** → **Habilitar**.
+
+### 3. Configurar la pantalla de consentimiento OAuth
+
+1. Menú → **APIs y servicios → Pantalla de consentimiento de OAuth**.
+2. Tipo de usuario: **Externo** → **Crear**.
+3. Completá:
+   - **Nombre de la aplicación:** `Mis Finanzas`
+   - **Correo de asistencia al usuario:** tu email
+   - **Datos de contacto del desarrollador:** tu email
+   - El resto podés dejarlo vacío → **Guardar y continuar**.
+4. **Alcances (scopes):** clic en "Agregar o quitar alcances", marcá:
+   - `.../auth/drive.file`
+   - `.../auth/spreadsheets`
+   → Actualizar → **Guardar y continuar**.
+5. **Usuarios de prueba:** clic en "+ Add Users". Agregá **tu email y los emails de todos los que van a usar la app** (hasta 100). Sin esto, nadie más que vos podrá conectarse.
+   → **Guardar y continuar**.
+6. **No hace falta publicar** la app ni pedir verificación (eso es solo si querés levantar el límite de 100 usuarios). Dejala en modo "Testing".
+
+### 4. Crear el Client ID
+
+1. Menú → **APIs y servicios → Credenciales**.
+2. **+ Crear credenciales → ID de cliente de OAuth**.
+3. Tipo de aplicación: **Aplicación web**.
+4. Nombre: `Mis Finanzas Web`.
+5. **Orígenes de JavaScript autorizados:** clic en "+ Agregar URI" y pegá **exactamente**:
+   ```
+   https://ivanrojashs-carp.github.io
+   ```
+   (sin barra al final, sin la ruta `/mis-finanzas/`, solo el dominio raíz de GitHub Pages)
+
+   Si querés probar la app localmente antes de subirla, agregá también `http://localhost:8080` o el puerto que uses.
+6. **URIs de redireccionamiento autorizados:** dejar vacío.
+7. **Crear** → aparece una ventanita con tu **Client ID** (algo como `123456789-abcdef.apps.googleusercontent.com`).
+8. **Copiá el Client ID.**
+
+### 5. Pegar el Client ID en el código
+
+1. Abrí `google-auth.js`.
+2. Buscá la línea:
+   ```javascript
+   CLIENT_ID: 'PEGAR_AQUI_TU_CLIENT_ID.apps.googleusercontent.com',
+   ```
+3. Reemplazala por tu Client ID:
+   ```javascript
+   CLIENT_ID: '123456789-abcdef.apps.googleusercontent.com',
+   ```
+4. Guardá.
+
+### 6. Subir a GitHub
+
+Subí los archivos actualizados a tu repo:
+- `index.html`
+- `google-auth.js` (con tu Client ID adentro)
+- `sync-engine.js`
+- `sw.js`
+- `manifest.json`
+
+Y listo. La primera vez que vos u otro usuario abra la app, va a ver el botón "Conectar con Google" en Datos y todo funciona solo.
+
+---
+
+## 📲 PARA LOS USUARIOS
+
+Nada de esto tenés que hacer, es solo lo que ellos ven:
+
+1. Abrí la app.
+2. Botón **Datos** → **Conectar con Google**.
+3. Aparece un popup: **elegí tu cuenta y aceptá los permisos** ("Mis Finanzas quiere acceder a Sheets/Drive").
+4. La app crea su propio Sheet en tu Drive y empieza a sincronizar.
+
+Después no hay que hacer nada más: cada cambio se sube solo y los cambios de otros dispositivos bajan cada 30 segundos.
+
+> **Nota sobre la pantalla de "app no verificada":** los usuarios pueden ver una pantalla que dice "Google no ha verificado esta aplicación". Es normal (para sacarla habría que pasar por un proceso de verificación que lleva semanas). Basta con hacer clic en "Configuración avanzada → Continuar a Mis Finanzas".
+
+---
+
+## 🔄 Cómo funciona la sincronización
+
+- **Automática:** cada cambio se sube tras unos segundos, y la app consulta el Sheet cada 30 s para traer los cambios de otros dispositivos del mismo usuario.
+- **Por fusión (merge):** los datos nunca se pisan. Cada registro tiene su marca de tiempo y gana el más reciente.
+- **Con tombstones:** los borrados se marcan y se propagan (no "reviven" en otro dispositivo).
+- **Con detección de conflictos:** si editás el mismo registro en dos dispositivos a la vez, la app te muestra ambas versiones y elegís.
+
+---
+
+## 📦 Archivos
 
 ```
 index.html       ← la app completa
-manifest.json    ← la hace instalable
-sw.js            ← funciona offline
-sync-engine.js   ← NUEVO: motor de fusión (timestamps, tombstones, conflictos)
-google-auth.js   ← comunicación con tu Apps Script
-apps-script.gs   ← código para pegar en tu Google Sheet
-icons/           ← íconos
+manifest.json    ← la hace instalable como PWA
+sw.js            ← funciona offline (v19)
+sync-engine.js   ← motor de fusión (timestamps, tombstones, conflictos)
+google-auth.js   ← OAuth + Sheets API (acá va tu Client ID)
+apps-script.gs   ← LEGACY: solo si algún usuario prefiere el modo viejo
+icons/           ← íconos de la PWA
 ```
 
-> ⚠️ **Importante:** esta versión suma un archivo nuevo, `sync-engine.js`. Cuando actualices en GitHub, asegurate de subirlo junto con los demás.
-
----
-
-## 🚀 PARTE 1 — Subir/actualizar la app en GitHub Pages
-
-1. Entrá a tu repositorio en GitHub.
-2. **Add file → Upload files** → arrastrá estos archivos (reemplazan los viejos):
-   - `index.html`
-   - `sync-engine.js`  ← **archivo nuevo, no lo olvides**
-   - `google-auth.js`
-   - `sw.js`
-   - `manifest.json`
-   > `apps-script.gs` **no va a GitHub** — ese va dentro de tu Google Sheet (Parte 2).
-3. **Commit changes.**
-4. Esperá 1-2 minutos.
-
-Como cambió el número de versión del Service Worker (a `v17`), la app te va a mostrar el cartel **"Hay una actualización disponible"** la próxima vez que la abras. Tocá recargar. Si no aparece, entrá a la configuración del sitio en Chrome y usá "Actualizar" o, en el peor caso, "Eliminar datos del sitio" y reinstalá (tus datos están a salvo en el Sheet).
-
----
-
-## 🔧 PARTE 2 — Actualizar el Apps Script (¡obligatorio en esta versión!)
-
-El código del servidor cambió por completo: ahora fusiona en vez de pisar, y usa hojas nuevas en tu Sheet. **Tenés que actualizar el script sí o sí**, o la sincronización no va a funcionar.
-
-1. Abrí tu proyecto en `script.google.com` (o desde tu Sheet: **Extensiones → Apps Script**).
-2. **Borrá todo** el código viejo y pegá el contenido completo de `apps-script.gs`.
-3. Configurá las dos líneas de arriba:
-   ```javascript
-   const SECRET   = 'TU_CLAVE_SECRETA';   // ← poné tu clave (la misma que usás en la app)
-   const SHEET_ID = '...';                // ← ya viene con tu ID cargado
-   ```
-   > La **clave secreta** es una palabra que inventás vos. **No es tu contraseña de Google.** Tiene que ser idéntica acá y en la app.
-4. **Guardá** (Ctrl+S).
-5. **Implementar → Administrar implementaciones → (ícono lápiz) Editar → Versión: Nueva versión → Implementar.**
-   > Hacelo así (editando la implementación existente) para que **la URL no cambie**. Si creás una implementación nueva desde cero, te da otra URL y tendrías que volver a pegarla en la app.
-
-### Sobre las hojas del Sheet
-
-El nuevo motor crea hojas nuevas automáticamente: **`Transacciones`, `Tarjetas`, `Prestamos`, `_Settings`** (con columnas internas `id`, `updatedAt`, `deleted`). También mantiene una hoja legible **`Resumen mensual`**.
-
-Las hojas del formato viejo quedan obsoletas y podés ignorarlas o borrarlas. La primera vez que sincronices desde el dispositivo que tiene tus datos buenos, esas hojas nuevas se van a poblar solas.
-
----
-
-## 📲 PARTE 3 — Conectar cada dispositivo
-
-En cada dispositivo (celular y PC):
-
-1. Abrí la app → botón **Datos** (o Config → sincronización).
-2. Pegá la **URL del Apps Script** (`.../exec`) y tu **clave secreta**.
-3. Tocá **Conectar**.
-
-La primera vez, la app trae lo que ya está en el Sheet y lo fusiona con lo que tengas en ese dispositivo. A partir de ahí, todo se sincroniza solo.
-
-> **Recomendación:** conectá **primero** el dispositivo que tiene tus datos correctos y dejá que suba todo. Después conectá los demás. Así te asegurás de que la "fuente de verdad" quede bien cargada desde el arranque.
-
----
-
-## 🔄 Cómo funciona la sincronización (resumen)
-
-- **Automática:** cada cambio se sube tras unos segundos, y la app consulta el Sheet cada 30 s para traer lo de otros dispositivos.
-- **Por fusión:** nunca se pisa. Cada registro gana según su marca de tiempo más reciente.
-- **Con tombstones:** los borrados se marcan y se propagan (no "reviven" en otro dispositivo).
-- **Con detección de conflictos:** si editás lo mismo en dos lados a la vez, la app te muestra ambas versiones y elegís.
+`apps-script.gs` ya no es necesario en el flujo normal. Queda en el paquete solo por si algún usuario todavía usa la versión anterior.
 
 ---
 
 ## 🛠️ Problemas comunes
 
-**"Clave incorrecta"** → La clave de la app no coincide con el `SECRET` del script. Revisá que sean idénticas (mayúsculas incluidas).
+**"Access blocked: This app's request is invalid"** al hacer clic en Conectar → El Client ID no coincide con el dominio autorizado. Verificá que en Google Cloud tengas `https://ivanrojashs-carp.github.io` como origen autorizado (sin barra ni ruta).
 
-**No sincroniza / error de conexión** → Verificá que hayas hecho "Nueva versión" al implementar el script actualizado. Si implementaste una versión nueva desde cero, la URL cambió: pegá la nueva en la app.
+**"La app no está configurada todavía"** → Faltó pegar el Client ID real en `google-auth.js`. Ver Paso 5.
 
-**No veo los cambios del otro dispositivo** → Esperá hasta 30 segundos, o tocá "Sincronizar ahora". Asegurate de que ambos estén conectados con la misma URL y clave.
+**Otro usuario no puede conectarse** → Su email no está en la lista de usuarios de prueba (Paso 3.5). Agregalo desde la Pantalla de consentimiento OAuth → Usuarios de prueba → + Add Users.
 
-**La app no se actualizó a v17** → Configuración del sitio en Chrome → "Eliminar datos del sitio" → reinstalá. Tus datos están en el Sheet, no se pierden.
+**"Sesión expirada"** → Normal cada ~1 hora. La app pide reconectar. Un clic y sigue.
+
+**No aparece el botón "Actualización disponible" al subir cambios** → "Eliminar datos del sitio" en Chrome y reinstalar. Los datos están a salvo en el Sheet.

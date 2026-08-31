@@ -1324,50 +1324,52 @@ function updateSyncBtn() {
 
 // ─── EXPORTAR / IMPORTAR / DRIVE ─────────────────────────────────────────────
 function handleSync() {
-  const lastExport = localStorage.getItem('mf_last_export');
-  const lastStr = lastExport
-    ? 'Último sync: ' + new Date(lastExport).toLocaleString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' })
+  const lastSynced = parseInt(localStorage.getItem('mf_last_synced_at') || '0');
+  const lastStr = lastSynced
+    ? 'Última sincronización: ' + new Date(lastSynced).toLocaleString('es-AR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })
     : 'Nunca sincronizado';
   const isLogged = window.gAuth && window.gAuth.isSignedIn();
   const email = isLogged ? window.gAuth.getEmail() : '';
-  const isConfigured = window.gAuth && typeof window.gAuth.signIn === 'function';
+  // Detectar si el usuario venía de la versión anterior con Apps Script
+  const hadOldConfig = !!localStorage.getItem('mf_gas_config');
 
   document.getElementById('drive-content').innerHTML = `
     <div class="alert info" style="margin-bottom:14px">
       <i class="ti ti-info-circle"></i>
-      <div class="alert-body"><b>${txs.length} movimientos</b> en este dispositivo.<br><span style="font-size:12px;opacity:.8">${lastStr}</span></div>
+      <div class="alert-body"><b>${activeTxs().length} movimientos</b> en este dispositivo.<br><span style="font-size:12px;opacity:.8">${lastStr}</span></div>
     </div>
 
     ${isLogged ? `
       <div class="alert success" style="margin-bottom:14px">
         <i class="ti ti-brand-google"></i>
-        <div class="alert-body">Conectado como <b>${email}</b></div>
+        <div class="alert-body">${email}<br><span style="font-size:12px;opacity:.8">La app creó su propio Sheet en tu Drive y lo sincroniza sola.</span></div>
       </div>
       <div class="alert info" style="margin-bottom:14px">
         <i class="ti ti-refresh"></i>
-        <div class="alert-body" style="font-size:12px">Sincronización automática por fusión: cada cambio se sube solo y la app baja los cambios de otros dispositivos cada 30 segundos. Los datos se combinan sin pisarse.</div>
+        <div class="alert-body" style="font-size:12px">Sincronización automática por fusión: los cambios se suben solos y bajan los de otros dispositivos cada 30 segundos. Los datos se combinan sin pisarse.</div>
       </div>
       <button class="btn primary" style="margin-bottom:8px" onclick="doSyncToSheets()">
         <i class="ti ti-refresh"></i> Sincronizar ahora
       </button>
-      <button class="btn" style="margin-bottom:14px;color:var(--text-muted)" onclick="gAuth.signOut();stopAutoSyncInterval();updateSyncBtn();handleSync()">
-        <i class="ti ti-logout"></i> Desconectar Apps Script
+      <button class="btn" style="margin-bottom:14px;color:var(--text-muted)" onclick="if(confirm('¿Desconectar? Los datos quedan en el Sheet, pero este dispositivo dejará de sincronizar hasta que vuelvas a conectarte.')){gAuth.signOut();stopAutoSyncInterval();updateSyncBtn();handleSync();}">
+        <i class="ti ti-logout"></i> Desconectar
       </button>` : `
-      <p style="font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px">Google Sheets (vía Apps Script)</p>
-      <div class="alert info" style="margin-bottom:12px">
-        <i class="ti ti-info-circle"></i>
-        <div class="alert-body" style="font-size:12px">Necesitás haber configurado el script en tu Google Sheet. Ver guía completa en el README.</div>
-      </div>
-      <div class="form-group">
-        <label>URL del Apps Script</label>
-        <input id="gas-url" type="text" placeholder="https://script.google.com/macros/s/.../exec">
-      </div>
-      <div class="form-group">
-        <label>Clave secreta</label>
-        <input id="gas-secret" type="password" placeholder="La misma que pusiste en el script">
-      </div>
-      <button class="btn primary" style="margin-bottom:14px" onclick="saveGasConfig()">
-        <i class="ti ti-link"></i> Conectar
+      ${hadOldConfig ? `
+        <div class="alert warning" style="margin-bottom:14px">
+          <i class="ti ti-arrow-up-circle"></i>
+          <div class="alert-body" style="font-size:13px">
+            <b>Nueva conexión disponible.</b><br>
+            <span style="font-size:12px">Ya no hace falta el Apps Script ni la clave secreta. Conectate directamente con Google y la app hace todo sola. Tu Sheet anterior queda intacto como respaldo.</span>
+          </div>
+        </div>` : `
+        <div class="alert info" style="margin-bottom:14px">
+          <i class="ti ti-info-circle"></i>
+          <div class="alert-body" style="font-size:13px">
+            Conectate con tu cuenta de Google. La app crea su propio Google Sheet en tu Drive y lo usa para sincronizar entre tus dispositivos. <b>No accede a ningún otro archivo tuyo.</b>
+          </div>
+        </div>`}
+      <button class="btn primary" style="margin-bottom:14px" onclick="doOAuthSignIn(this)">
+        <i class="ti ti-brand-google"></i> Conectar con Google
       </button>`}
 
     <p style="font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px">Exportar local</p>
@@ -1683,55 +1685,66 @@ async function doSyncToSheets() {
   btn.innerHTML = '<i class="ti ti-cloud-upload"></i> Sincronizar ahora';
 }
 
-// ── Primera conexión: traer lo que ya existe en el Sheet ─────────────────────
-async function saveGasConfig() {
-  const url = document.getElementById('gas-url').value.trim();
-  const secret = document.getElementById('gas-secret').value.trim();
-  if (!url || !secret) { toast('⚠️ Completá la URL y la clave'); return; }
-  if (!url.includes('script.google.com')) { toast('⚠️ La URL no parece ser de Apps Script'); return; }
-
-  window.gAuth.setConfig(url, secret, 'Apps Script conectado');
-  updateSyncBtn();
-  toast('Conectado. Trayendo datos existentes del Sheet...');
+// ── Conexión OAuth: primera conexión con Google (crea/encuentra el Sheet) ──
+async function doOAuthSignIn(btn) {
+  const orig = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i> Conectando con Google...';
 
   try {
-    const data = await window.gAuth.readAll();
-    const remoteTx = data.transactions || [];
-    const nRemote = remoteTx.filter(t => !t.deleted).length;
-    const nLocal = txs.filter(t => !t.deleted).length;
+    // 1. Autenticar (abre popup de Google la primera vez)
+    await window.gAuth.signIn();
+    toast('✓ Autenticado. Preparando tu Sheet...');
 
-    // Si hay datos en el Sheet, los fusionamos con lo local (nunca pisamos)
-    if (nRemote > 0) {
-      const merged = window.syncEngine.mergeCollection(_txToRecords(), remoteTx, 0, ['fecha','tipo','desc','categoria','monto','nota']);
-      txs = _recordsToTx(merged.merged);
-      const cardM = window.syncEngine.mergeCollection(_cardToRecords(), data.cards || [], 0, ['name','saldo']);
-      cards = _recordsToCards(cardM.merged);
-      const loanM = window.syncEngine.mergeCollection(_loanToRecords(), data.loans || [], 0, ['name','total']);
-      loans = _recordsToLoans(loanM.merged);
+    // 2. Limpiar rastros de la config anterior (Apps Script), si existía
+    localStorage.removeItem('mf_gas_config');
 
-      const rb = data.blobs || {};
-      if (rb.budgets) { budgets = rb.budgets.data; _blobTimestamps.budgets = rb.budgets.updatedAt; }
-      if (rb.alertConfig) { alertConfig = rb.alertConfig.data; _blobTimestamps.alertConfig = rb.alertConfig.updatedAt; }
-      if (rb.userColors) { userColors = rb.userColors.data; _blobTimestamps.userColors = rb.userColors.updatedAt; }
-      if (rb.customCats) { customCats = rb.customCats.data; _blobTimestamps.customCats = rb.customCats.updatedAt; }
-      _saveBlobTimestamps();
+    updateSyncBtn();
 
-      _persistLocal();
-      window.syncEngine.setLastSyncedAt(data.serverTime || window.syncEngine.now());
-      renderDashboard();
-      toast(`✓ ${nRemote} movimientos traídos del Sheet (fusionados con los ${nLocal} de este equipo)`);
-    } else {
-      toast('Sheet vacío. Se subirán los datos de este dispositivo.');
+    // 3. Leer lo que ya haya en el Sheet (por si ya existía en Drive de otro dispositivo)
+    try {
+      const data = await window.gAuth.readAll();
+      const remoteTx = data.transactions || [];
+      const nRemote = remoteTx.filter(t => !t.deleted).length;
+      const nLocal = activeTxs().length;
+
+      if (nRemote > 0) {
+        // Ya había un Sheet con datos: fusionar con lo local (nunca pisar)
+        const merged = window.syncEngine.mergeCollection(_txToRecords(), remoteTx, 0, ['fecha','tipo','desc','categoria','monto','nota']);
+        txs = _recordsToTx(merged.merged);
+        const cardM = window.syncEngine.mergeCollection(_cardToRecords(), data.cards || [], 0, ['name','saldo']);
+        cards = _recordsToCards(cardM.merged);
+        const loanM = window.syncEngine.mergeCollection(_loanToRecords(), data.loans || [], 0, ['name','total']);
+        loans = _recordsToLoans(loanM.merged);
+
+        const rb = data.blobs || {};
+        if (rb.budgets)     { budgets = rb.budgets.data;         _blobTimestamps.budgets = rb.budgets.updatedAt; }
+        if (rb.alertConfig) { alertConfig = rb.alertConfig.data; _blobTimestamps.alertConfig = rb.alertConfig.updatedAt; }
+        if (rb.userColors)  { userColors = rb.userColors.data;   _blobTimestamps.userColors = rb.userColors.updatedAt; }
+        if (rb.customCats)  { customCats = rb.customCats.data;   _blobTimestamps.customCats = rb.customCats.updatedAt; }
+        _saveBlobTimestamps();
+        _persistLocal();
+        window.syncEngine.setLastSyncedAt(data.serverTime || window.syncEngine.now());
+        renderDashboard();
+        toast(`✓ ${nRemote} movimientos del Sheet fusionados con los ${nLocal} de este dispositivo`);
+      } else {
+        toast('✓ Sheet nuevo creado. Subiendo tus datos...');
+      }
+    } catch(e) {
+      console.warn('No se pudo leer el Sheet al conectar:', e.message);
+      toast('⚠️ Conectado, pero no se pudo leer el Sheet: ' + e.message);
     }
-  } catch(e) {
-    console.warn('No se pudo leer el Sheet al conectar:', e.message);
-    toast('⚠️ Conectado, pero no se pudo leer el Sheet: ' + e.message);
-  }
 
-  localStorage.setItem('mf_initial_sync_done', 'true');
-  startAutoSyncInterval();
-  runSync(); // sube lo local y deja todo consistente
-  handleSync();
+    localStorage.setItem('mf_initial_sync_done', 'true');
+    startAutoSyncInterval();
+    await runSync(); // subir lo local y dejar todo consistente
+    handleSync();
+
+  } catch(e) {
+    toast('⚠️ ' + e.message);
+    btn.disabled = false;
+    btn.innerHTML = orig;
+  }
 }
 
 function closeDrive() { document.getElementById('drive-overlay').classList.remove('open'); }
